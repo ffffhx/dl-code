@@ -116,7 +116,8 @@ export class SessionManager {
     return context;
   }
 
-  saveSession(context: SessionContext): void {
+  saveSession(context: SessionContext, strict = false): void {
+    const temporary = this.getSessionFilePath(context.sessionId) + `.${randomUUID()}.tmp`;
     try {
       const filePath = this.getSessionFilePath(context.sessionId);
       const data = {
@@ -124,9 +125,13 @@ export class SessionManager {
         messages: serializeMessages(context.messages),
         updatedAt: Date.now(),
       };
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.writeFileSync(temporary, JSON.stringify(data, null, 2), 'utf-8');
+      fs.renameSync(temporary, filePath);
     } catch (error) {
+      if (strict) throw error;
       console.error('Error saving session:', error);
+    } finally {
+      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
   }
 

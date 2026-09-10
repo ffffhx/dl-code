@@ -36,10 +36,12 @@ ui/
 
 **职责：**
 
-1. 初始化 SessionManager 和 CodingAgent
-2. 管理会话上下文
-3. 处理用户输入，调用 Agent 执行
-4. 处理流式响应，更新 UI 状态
+1. 接收启动入口创建的 HarnessRuntime
+2. 将运行时会话快照投影到 Zustand
+3. 将用户输入、取消和恢复操作交给运行时
+4. 订阅运行事件，更新消息、工具进度和错误提示
+
+执行与持久化边界见 [Harness 文档](../../docs/HARNESS.md)。
 
 **布局结构：**
 
@@ -142,8 +144,7 @@ ui
 ├── ink-text-input   # 文本输入组件
 ├── react            # React 核心
 ├── store            # 状态管理
-├── agents           # CodingAgent
-└── session          # SessionManager
+└── harness          # 执行入口和事件
 ```
 
 ## 使用方式
@@ -152,9 +153,15 @@ ui
 import React from 'react';
 import { render } from 'ink';
 import { App } from './ui/App';
+import { createDefaultHarness } from './harness/default';
 
 // 启动应用
-render(React.createElement(App));
+const harness = await createDefaultHarness();
+try {
+  await render(React.createElement(App, { harness })).waitUntilExit();
+} finally {
+  await harness.shutdown();
+}
 ```
 
 ## 设计要点

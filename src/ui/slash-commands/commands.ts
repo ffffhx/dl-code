@@ -16,10 +16,15 @@ export interface SlashCommandContext {
 export interface SlashCommandResult {
   success: boolean;
   message?: string;
-  action?: 'none' | 'clear' | 'exit';
+  action?: 'none' | 'clear' | 'exit' | 'resume';
 }
 
 const commands: SlashCommand[] = [
+  {
+    name: 'resume',
+    description: 'Continue the latest incomplete run from saved context',
+    execute: () => ({ success: true, action: 'resume' }),
+  },
   {
     name: 'help',
     aliases: ['h', '?'],
@@ -96,6 +101,8 @@ const commands: SlashCommand[] = [
         'Keyboard Shortcuts:',
         '',
         '  Enter     - Send message',
+        '  Escape    - Cancel the active run',
+        '  /resume   - Continue the latest incomplete run',
         '  Ctrl+C    - Exit application',
         '  /help     - Show available commands',
         '  /clear    - Clear chat history',

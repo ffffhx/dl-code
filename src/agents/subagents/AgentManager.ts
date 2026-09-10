@@ -201,4 +201,17 @@ export class AgentManager {
       this.finishRoot();
     } finally { this.releaseJournal(); }
   }
+
+  async cancelAll(): Promise<void> {
+    const active = [...this.running.values()];
+    for (const run of active) run.controller.abort(new Error('Parent run cancelled'));
+    await Promise.allSettled(active.map(run => run.done));
+  }
+
+  resetRoot(context: SessionContext): void {
+    if (this.running.size) throw new Error('Wait for child agents before clearing the conversation');
+    if (context.sessionId !== this.rootId) throw new Error('Root session mismatch');
+    this.records.set(this.rootId, { id: this.rootId, task: 'Main conversation', status: 'idle', inbox: [], context });
+    this.save(this.rootId, 'root_cleared');
+  }
 }

@@ -10,13 +10,15 @@ const TodoItemSchema = z.object({
   created_at: z.number().optional().nullable(),
 });
 
-export const todoWriteTool = new DynamicStructuredTool({
+export function createTodoWriteTool(update: (todos: TodoItem[]) => void) {
+return new DynamicStructuredTool({
   name: 'todo_write',
   description: 'Update the entire TODO list with the latest items.',
   schema: z.object({
     todos: z.array(TodoItemSchema),
   }),
   func: async ({ todos }: { todos: TodoItem[] }) => {
+    update(todos);
     const unfinishedTodos = todos.filter(
       (todo) => todo.status !== TodoStatus.completed && todo.status !== TodoStatus.cancelled
     );
@@ -31,3 +33,6 @@ export const todoWriteTool = new DynamicStructuredTool({
     return message;
   },
 });
+}
+
+export const todoWriteTool = createTodoWriteTool(() => {});

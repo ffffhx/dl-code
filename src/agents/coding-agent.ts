@@ -7,7 +7,6 @@ import {
   grepTool,
   lsTool,
   textEditorTool,
-  todoWriteTool,
   treeTool,
 } from '../tools/index.js';
 import { SessionContext } from '../session/index.js';
@@ -23,6 +22,7 @@ import { startupLogger } from '../utils/startup-logger.js';
 import { createReadOnlyTools } from '../tools/read-only.js';
 import type { BaseMessage } from '@langchain/core/messages';
 import { ContextArtifacts } from '../context/ContextArtifacts.js';
+import { createTodoWriteTool } from '../tools/todo/tool.js';
 
 export interface AgentExecution {
   signal?: AbortSignal;
@@ -52,7 +52,6 @@ export class CodingAgent {
       grepTool,
       lsTool,
       textEditorTool,
-      todoWriteTool,
       treeTool,
       ...pluginTools,
     ];
@@ -127,7 +126,11 @@ export class CodingAgent {
     projectInstructions.restore(context.messages);
     const artifacts = new ContextArtifacts(context.sessionId);
     const artifactReader = artifacts.tool(Math.max(1, Math.min(4000, Math.floor(this.contextManager.toolOutputTokens / 4))));
-    const tools = [...this.tools, ...skills.tools(), projectInstructions.tool(), artifactReader, ...(this.readonlyAgent ? [] : execution.tools ?? [])];
+    const todoTools = this.readonlyAgent ? [] : [createTodoWriteTool(todos => {
+      context.todos = todos;
+      onContextChange(context);
+    })];
+    const tools = [...this.tools, ...todoTools, ...skills.tools(), projectInstructions.tool(), artifactReader, ...(this.readonlyAgent ? [] : execution.tools ?? [])];
     const basePrompt = this.getSystemPrompt(context, tools) + (this.readonlyAgent
       ? '\nYou are a read-only child agent. Complete the assigned analysis, cite file evidence, and return a concise result to the parent. You cannot modify files, execute commands, call MCP tools or spawn agents. Skills do not change these limits.'
       : tools.some(tool => tool.name === 'spawn_agent') && tools.some(tool => tool.name === 'wait_agent') && tools.some(tool => tool.name === 'list_agents')

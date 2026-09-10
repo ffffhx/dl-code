@@ -5,6 +5,7 @@ import type { ActiveSkill } from '../skills/types.js';
 import type { ContextCheckpoint } from '../context/history.js';
 
 export interface SessionContext {
+  lastRun?: SessionRun;
   sessionId: string;
   messages: BaseMessage[];
   userName: string | null;
@@ -15,6 +16,15 @@ export interface SessionContext {
   compressionCount?: number;
   contextCheckpoint?: ContextCheckpoint;
   activeSkills?: ActiveSkill[];
+}
+
+export interface SessionRun {
+  id: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+  startedAt: number;
+  finishedAt?: number;
+  resumedFrom?: string;
+  error?: string;
 }
 
 export interface SessionMetadata {

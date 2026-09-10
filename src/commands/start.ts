@@ -5,6 +5,8 @@ import { SessionManager } from '../session/index.js';
 import { initializeMCPServers } from '../mcp/index.js';
 import { getConfigSection } from '../config/index.js';
 import { startupLogger } from '../utils/startup-logger.js';
+import { createDefaultHarness } from '../harness/default.js';
+import { getGlobalMCPManager } from '../mcp/index.js';
 
 export interface StartOptions {
   new?: boolean;
@@ -29,5 +31,13 @@ export async function startCommand(options: StartOptions): Promise<void> {
     startupLogger.log(message, 'info');
   }
 
-  render(React.createElement(App), { exitOnCtrlC: false });
+  let harness: Awaited<ReturnType<typeof createDefaultHarness>> | undefined;
+  try {
+    harness = await createDefaultHarness();
+    const view = render(React.createElement(App, { harness }), { exitOnCtrlC: false });
+    await view.waitUntilExit();
+  } finally {
+    if (harness) await harness.shutdown();
+    else await getGlobalMCPManager().disconnectAll();
+  }
 }

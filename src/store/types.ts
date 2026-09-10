@@ -52,6 +52,7 @@ export interface AppState {
 }
 
 export interface SessionState {
+  lastRun?: import('../session/types.js').SessionRun;
   sessionId: string;
   messages: BaseMessage[];
   displayMessages: Message[];

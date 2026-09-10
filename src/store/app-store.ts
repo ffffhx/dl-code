@@ -54,6 +54,7 @@ export interface Store {
   setIsGenerating: (isGenerating: boolean) => void;
 
   initSession: (context: SessionContext) => void;
+  syncHarnessSession: (context: SessionContext) => void;
   addMessage: (message: BaseMessage) => void;
   setMessages: (messages: BaseMessage[]) => void;
   setTokenUsage: (usage: TokenUsage) => void;
@@ -394,6 +395,7 @@ export const useAppStore = create<Store>((set) => ({
         session: {
           ...state.session,
           sessionId: context.sessionId,
+          lastRun: context.lastRun,
           messages: context.messages,
           userName: context.userName,
           todos,
@@ -406,6 +408,18 @@ export const useAppStore = create<Store>((set) => ({
         },
       };
     }),
+
+  syncHarnessSession: (context) => {
+    useAppStore.getState().initSession(context);
+    set(state => ({ session: { ...state.session, displayMessages: context.messages
+      .filter(message => (message._getType() === 'human' || message._getType() === 'ai') && message.content)
+      .map((message, index) => ({
+        id: message.id ?? `${context.sessionId}-${index}`,
+        role: message._getType() === 'human' ? 'user' as const : 'assistant' as const,
+        content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+        timestamp: context.updatedAt,
+      })) } }));
+  },
 
   addMessage: (message) =>
     set((state) => ({
@@ -445,6 +459,7 @@ export const useAppStore = create<Store>((set) => ({
     const store = useAppStore.getState();
     return {
       sessionId: store.session.sessionId,
+      lastRun: store.session.lastRun,
       messages: store.session.messages,
       userName: store.session.userName,
       todos: store.session.todos.map((t: Todo) => ({
