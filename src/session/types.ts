@@ -1,6 +1,8 @@
 import { BaseMessage } from '@langchain/core/messages';
 import { TodoItem } from '../tools/todo/types.js';
 import { TokenUsage } from '../context/index.js';
+import type { ActiveSkill } from '../skills/types.js';
+import type { ContextCheckpoint } from '../context/history.js';
 
 export interface SessionContext {
   sessionId: string;
@@ -11,6 +13,8 @@ export interface SessionContext {
   updatedAt: number;
   tokenUsage?: TokenUsage;
   compressionCount?: number;
+  contextCheckpoint?: ContextCheckpoint;
+  activeSkills?: ActiveSkill[];
 }
 
 export interface SessionMetadata {

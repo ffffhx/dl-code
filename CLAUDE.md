@@ -55,7 +55,16 @@ pnpm start
    - Token counting and context compression
    - Automatic summarization when approaching token limits
 
+### Skills
+
+- `src/skills/` discovers user and project `.deer-code/skills/*/SKILL.md` packages; project names override user names.
+- `load_skill`, `read_skill_resource`, and `unload_skill` provide on-demand instructions and bounded relative text-resource reads. Loading never runs scripts.
+- `createSkillMiddleware` rebuilds active instructions before each model request and includes them in context budgeting. Persist only skill path/hash references in sessions; changed files deactivate until reloaded.
+- `pnpm test` runs offline skill and graph integration tests. `deer-code skills [name]` inspects skills without model credentials. See `docs/SKILLS.md` for usage and `pnpm skills:preview` for local inspection.
+
 ### Configuration
+
+Subagent implementation lives in `src/agents/subagents/`. `AgentManager` owns lifecycle, inboxes, concurrency (two read-only children) and per-root JSONL journals. Only the root gets delegation tools. Children get no shell, editor, Todo, MCP or spawn tools. `CodingAgent.cleanup()` releases only its owned resources; application shutdown owns MCP disconnection. Shell tools are per-agent factories, and cancellation is propagated to the model and async search. See `docs/SUBAGENTS.md`, `pnpm test`, and `pnpm subagents:preview`.
 
 Configuration is managed through `config.yaml`:
 - Model settings (API keys, base URLs, parameters)

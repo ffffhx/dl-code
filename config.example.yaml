@@ -11,7 +11,7 @@ models:
     api_base: 'https://api.openai.com/v1'
     api_key: $OPENAI_API_KEY
     temperature: 0
-    max_tokens: 8192
+    max_tokens: 8192 # Maximum model output, separate from the context window below.
     extra_body:
       reasoning_effort: 'minimal'
   # chat_model:
@@ -24,6 +24,16 @@ models:
   #   extra_body:
   #     thinking:
   #       type: auto
+
+context:
+  max_tokens: 100000 # Total window; set to a value supported by your model/provider.
+  # reserve_output_tokens defaults to models.chat_model.max_tokens (8192 if absent).
+  safety_margin_tokens: 2048
+  compression_threshold: 0.8 # Fraction of available input budget.
+  target_ratio: 0.56 # Aim below the trigger to leave space for subsequent work.
+  recent_tokens: 12000 # Retain recent whole tool exchanges within this soft budget.
+  summary_tokens: 2000 # Maximum stored task handoff size.
+  tool_output_tokens: 4000 # Larger text results become previews + artifact references.
 
 tools:
   # MCP (Model Context Protocol) servers configuration

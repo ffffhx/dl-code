@@ -1,6 +1,8 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { project } from '../project.js';
+import { skillsCommand } from './skills.js';
+import { agentsCommand } from './agents.js';
 import {
   startCommand,
   listCommand,
@@ -99,6 +101,18 @@ export function setupYargs(argv: string[]) {
         infoCommand();
       }
     )
+    .command(
+      'skills [name]',
+      'List discovered skills or inspect one without calling a model',
+      (yargs) => yargs
+        .positional('name', { type: 'string', describe: 'Skill name to load' })
+        .option('dir', { type: 'string', default: process.cwd(), describe: 'Project directory' })
+        .option('resource', { type: 'string', describe: 'Read a relative text resource from the named skill' }),
+      (argv) => skillsCommand(argv.dir, argv.name, argv.resource),
+    )
+    .command('agents [session]', 'Inspect persisted subagent records without calling a model',
+      (yargs) => yargs.positional('session', { type: 'string', describe: 'Root session ID; omit to list roots' }),
+      (argv) => agentsCommand(argv.session))
     .help()
     .alias('h', 'help')
     .alias('v', 'version')

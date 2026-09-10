@@ -1,13 +1,13 @@
-import { PromptContext } from './types.js';
+import { PromptContext, SystemPromptConfig } from './types.js';
 
-export function generateContextPrompt(context: PromptContext): string {
+export function generateContextPrompt(context: PromptContext, config: SystemPromptConfig = {}): string {
   let prompt = '\n# Context Information\n';
 
-  if (context.userName) {
+  if (config.includeUserInfo !== false && context.userName) {
     prompt += `\nUser Name: ${context.userName}\n`;
   }
 
-  if (context.projectRoot) {
+  if (config.includeProjectInfo !== false && context.projectRoot) {
     prompt += `Project Root Directory: ${context.projectRoot}\n`;
   }
 

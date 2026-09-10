@@ -1,5 +1,7 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import type { TokenUsage } from '../context/index.js';
+import type { ActiveSkill } from '../skills/types.js';
+import type { ContextCheckpoint } from '../context/history.js';
 
 export enum FocusId {
   MAIN_INPUT = 'mainInput',
@@ -62,6 +64,8 @@ export interface SessionState {
   updatedAt: number;
   tokenUsage?: TokenUsage;
   compressionCount?: number;
+  contextCheckpoint?: ContextCheckpoint;
+  activeSkills?: ActiveSkill[];
 }
 
 export interface UIState {

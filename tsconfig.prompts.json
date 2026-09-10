@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*",
+    "scripts/prompt-eval.ts",
+    "scripts/prompt-eval-cases.ts",
+    "tests/prompts.test.ts",
+    "tests/prompt-eval.test.ts"
+  ]
+}

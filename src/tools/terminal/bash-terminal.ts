@@ -1,86 +1,83 @@
-import { spawn, IPty } from 'node-pty';
-import os from 'os';
+﻿import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
-// 实现了一个持久化的bash终端会话，使用node-pty库来创建和管理伪终端
+/** One persistent non-interactive shell per owner; never share its buffers across agents. */
 export class BashTerminal {
-  private pty: IPty; // 伪终端实例，伪终端是一个给程序用的模拟终端环境
-  private cwd: string; // 当前工作目录
-  private outputBuffer: string = ''; // 输出缓冲区，用于存储终端的输出
-  private prompt: string = 'BASH_TERMINAL_PROMPT> '; // 自定义的命令提示符，用于 检测命令是否执行完毕
+  private child: ChildProcessWithoutNullStreams;
+  private pending?: { marker: string; output: string; resolve: (value: string) => void; reject: (error: Error) => void; dispose: () => void };
+  private closed = false;
+  private exited: Promise<void>;
 
-  constructor(cwd?: string) {
-    this.cwd = cwd || process.cwd();
-    
-    const shell = os.platform() === 'win32' ? 'powershell.exe' : '/bin/bash';
-    
-    this.pty = spawn(shell, [], {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 30,
-      cwd: this.cwd,
-      env: process.env as { [key: string]: string },
+  constructor(cwd = process.cwd()) {
+    const windows = process.platform === 'win32';
+    this.child = spawn(windows ? 'powershell.exe' : '/bin/bash', windows ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'] : ['--noprofile', '--norc'], {
+      cwd, stdio: 'pipe', windowsHide: true, detached: !windows,
     });
-
-    this.pty.onData((data) => {
-      this.outputBuffer += data;
-    });
-
-    this.setupPrompt();
+    this.exited = new Promise(resolve => this.child.once('close', () => resolve()));
+    this.child.stdout.on('data', chunk => this.receive(chunk.toString()));
+    this.child.stderr.on('data', chunk => this.receive(chunk.toString()));
+    this.child.on('error', error => this.fail(error));
+    this.child.on('close', () => { this.closed = true; this.fail(new Error('Shell exited')); });
   }
 
-  private setupPrompt(): void {
-    this.pty.write(`PS1="${this.prompt}"\n`);
-    this.waitForPrompt();
+  private fail(error: Error): void {
+    const pending = this.pending;
+    this.pending = undefined;
+    pending?.dispose();
+    pending?.reject(error);
   }
 
-  // 用于等待命令执行完毕
-  private waitForPrompt(timeout: number = 5000): Promise<void> {
+  private receive(text: string): void {
+    const pending = this.pending;
+    if (!pending) return;
+    pending.output += text;
+    if (pending.output.length > 2_000_000) {
+      this.fail(new Error('Shell output exceeded 2 MB')); void this.close(); return;
+    }
+    const markerPattern = new RegExp(`${pending.marker}:(-?\\d+)\\r?\\n`, 'g');
+    const matches = [...pending.output.matchAll(markerPattern)];
+    // Both pipes must reach their marker; otherwise late stderr can leak into the next command.
+    if (matches.length === 2) {
+      this.pending = undefined;
+      pending.dispose();
+      pending.resolve(`${pending.output.replace(markerPattern, '').trim()}\n[exit_code: ${matches[0][1]}]`);
+    }
+  }
+
+  execute(command: string, timeout = 30000, signal?: AbortSignal): Promise<string> {
+    if (this.closed) return Promise.reject(new Error('Shell is closed'));
+    if (this.pending) return Promise.reject(new Error('This agent already has a running shell command'));
+    signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      const checkInterval = setInterval(() => {
-        if (this.outputBuffer.includes(this.prompt)) {
-          clearInterval(checkInterval);
-          this.outputBuffer = '';
-          resolve();
-        } else if (Date.now() - startTime > timeout) {
-          clearInterval(checkInterval);
-          reject(new Error('Timeout waiting for prompt'));
-        }
-      }, 100);
+      const marker = `DEER_DONE_${randomUUID().replaceAll('-', '')}`;
+      const abort = () => { this.fail(new Error('Shell command cancelled')); void this.close(); };
+      const timer = setTimeout(() => { this.fail(new Error('Shell command timed out')); void this.close(); }, timeout);
+      this.pending = { marker, output: '', resolve, reject, dispose: () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); } };
+      signal?.addEventListener('abort', abort, { once: true });
+      const encoded = Buffer.from(command).toString('base64');
+      const script = process.platform === 'win32'
+        ? `$global:LASTEXITCODE=0; try { Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))); $deerCommandStatus=if ($?) { $global:LASTEXITCODE } else { 1 } } catch { [Console]::Error.WriteLine($_.ToString()); $deerCommandStatus=1 }; [Console]::Out.WriteLine('${marker}:' + $deerCommandStatus); [Console]::Error.WriteLine('${marker}:' + $deerCommandStatus)\n`
+        : `eval "$(printf '%s' '${encoded}' | base64 --decode)"; deer_command_status=$?; printf '\\n${marker}:%s\\n' "$deer_command_status"; printf '\\n${marker}:%s\\n' "$deer_command_status" >&2\n`;
+      this.child.stdin.write(script, error => { if (error) this.fail(error); });
     });
   }
 
-  async execute(command: string, timeout: number = 30000): Promise<string> {
-    this.outputBuffer = '';
-    this.pty.write(`${command}\n`);
+  async getcwd(): Promise<string> { return this.execute(process.platform === 'win32' ? '(Get-Location).Path' : 'pwd'); }
 
-    await this.waitForPrompt(timeout);
-
-    let output = this.outputBuffer;
-    
-    const lines = output.split('\n');
-    if (lines.length > 0 && lines[0].trim() === command.trim()) {
-      lines.shift();
+  async close(): Promise<void> {
+    if (!this.closed) {
+      this.closed = true;
+      this.fail(new Error('Shell closed'));
+      const pid = this.child.pid;
+      if (pid) {
+        if (process.platform === 'win32') {
+          const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+          killer.on('error', () => this.child.kill());
+        } else {
+          try { process.kill(-pid, 'SIGKILL'); } catch { this.child.kill('SIGKILL'); }
+        }
+      }
     }
-
-    output = lines
-      .map((line) => line.replace(this.prompt, '').trim())
-      .join('\n')
-      .trim();
-
-    output = output.replace(/\x1b\[[0-9;]*m/g, '');
-
-    return output;
-  }
-
-  async getcwd(): Promise<string> {
-    const result = await this.execute('pwd');
-    return result.trim();
-  }
-
-  close(): void {
-    if (this.pty) {
-      this.pty.kill();
-    }
+    await this.exited;
   }
 }

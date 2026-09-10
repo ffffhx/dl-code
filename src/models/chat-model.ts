@@ -34,6 +34,8 @@ export function initChatModel(): ChatOpenAI {
   delete restSettings.model;
   delete restSettings.api_key;
   delete restSettings.type;
+  delete restSettings.compression_threshold;
+  delete restSettings.max_tokens;
 
   const configuration: any = {
     modelName: model,
@@ -49,6 +51,7 @@ export function initChatModel(): ChatOpenAI {
   const chatModel = new ChatOpenAI({
     ...configuration,
     ...restSettings,
+    maxTokens: settings.max_tokens ?? 8192,
   });
 
   return chatModel;

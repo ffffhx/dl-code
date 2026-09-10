@@ -1,6 +1,9 @@
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { execSync } from 'child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { project } from '../../project.js';
+const executeFile = promisify(execFile);
 import { DEFAULT_IGNORE_PATTERNS } from './ignore.js';
 
 export const grepTool = new DynamicStructuredTool({
@@ -22,12 +25,10 @@ Supports full regex syntax, file filtering, and various output modes.`,
     head_limit: z.number().optional().nullable().describe('Limit output to first N lines/entries.'),
     multiline: z.boolean().nullable().default(false).describe('Enable multiline mode where patterns can span lines.'),
   }),
-  func: async ({ pattern, path, glob, output_mode, B, A, C, n, i, type, head_limit, multiline }) => {
-    const cmd = ['rg'];
-    
-    cmd.push(pattern);
-    const searchPath = path ?? '.';
-    cmd.push(searchPath);
+  func: async ({ pattern, path, glob, output_mode, B, A, C, n, i, type, head_limit, multiline }, _runManager, config) => {
+    config?.signal?.throwIfAborted();
+    const cmd: string[] = [];
+    const searchPath = path ?? project.rootDir;
     
     const effectiveOutputMode = output_mode ?? 'files_with_matches';
     if (effectiveOutputMode === 'files_with_matches') {
@@ -73,9 +74,11 @@ Supports full regex syntax, file filtering, and various output modes.`,
     }
     
     try {
-      let output = execSync(cmd.join(' '), {
-        encoding: 'utf8',
-      }).toString();
+      cmd.push('--', pattern, searchPath);
+      let { stdout: output } = await executeFile('rg', cmd, {
+        encoding: 'utf8', signal: config?.signal, timeout: 30000, maxBuffer: 2_000_000,
+        cwd: project.rootDir, windowsHide: true,
+      });
       
       if (head_limit && output) {
         const lines = output.split('\n');
@@ -88,7 +91,8 @@ Supports full regex syntax, file filtering, and various output modes.`,
         return 'No matches found.';
       }
     } catch (error: any) {
-      if (error.status === 1) {
+      config?.signal?.throwIfAborted();
+      if (error.code === 1) {
         return 'No matches found.';
       }
       return `Error: ${error.stderr || error.message}`;

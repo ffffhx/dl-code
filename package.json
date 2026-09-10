@@ -8,6 +8,12 @@
     "deer-code": "./dist/main.js"
   },
   "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "skills:preview": "tsx scripts/skills-preview.ts",
+    "eval:prompts": "tsx --test tests/prompts.test.ts tests/prompt-eval.test.ts",
+    "eval:prompts:live": "tsx scripts/prompt-eval.ts",
+    "typecheck:prompts": "tsc -p tsconfig.prompts.json",
+    "subagents:preview": "tsx scripts/subagents-preview.ts",
     "dev": "tsx src/main.ts",
     "dev:silent": "npx tsx src/main.ts",
     "build": "tsc",

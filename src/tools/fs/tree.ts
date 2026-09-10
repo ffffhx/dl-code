@@ -68,7 +68,7 @@ function generateTree(
         lines.push(`${prefix}${connector}${entry.name}`);
       }
     });
-  } catch (error) {
+  } catch {
     lines.push(`${prefix}[Permission Denied]`);
   }
   
@@ -82,7 +82,7 @@ Shows files and directories in a hierarchical tree structure.
 Automatically excludes common ignore patterns (version control, dependencies, build artifacts, etc.).`,
   schema: z.object({
     path: z.string().optional().nullable().describe('Directory path to display. Defaults to current working directory if not specified.'),
-    max_depth: z.number().nullable().default(3).describe('Maximum depth to traverse. Should be less than or equal to 3. Defaults to 3.'),
+    max_depth: z.number().int().min(0).max(5).nullable().default(3).describe('Maximum depth to traverse, from 0 to 5. Defaults to 3.'),
   }),
   func: async ({ path: searchPath, max_depth }: { path?: string | null; max_depth?: number | null }) => {
     const targetPath = searchPath ?? '.';

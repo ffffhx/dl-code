@@ -13,6 +13,7 @@ import type {
 import type { TokenUsage } from '../context/index.js';
 import type { SessionContext } from '../session/index.js';
 import { TodoStatus, TodoPriority } from '../tools/todo/types.js';
+import type { ActiveSkill } from '../skills/types.js';
 
 export interface Store {
   app: AppState;
@@ -57,6 +58,8 @@ export interface Store {
   setMessages: (messages: BaseMessage[]) => void;
   setTokenUsage: (usage: TokenUsage) => void;
   setCompressionCount: (count: number) => void;
+  setContextCheckpoint: (checkpoint: SessionContext['contextCheckpoint']) => void;
+  setActiveSkills: (skills: ActiveSkill[]) => void;
   getSessionContext: () => SessionContext;
 
   openFiles: Array<{ path: string; content: string }>;
@@ -97,6 +100,7 @@ export const useAppStore = create<Store>((set) => ({
     tokenUsage: undefined,
     // 上下文压缩次数
     compressionCount: undefined,
+    activeSkills: [],
   },
 
   ui: {
@@ -259,6 +263,10 @@ export const useAppStore = create<Store>((set) => ({
         ...state.session,
         messages: [],
         displayMessages: [],
+        activeSkills: [],
+        contextCheckpoint: undefined,
+        compressionCount: 0,
+        tokenUsage: undefined,
       },
     })),
 
@@ -393,6 +401,8 @@ export const useAppStore = create<Store>((set) => ({
           updatedAt: context.updatedAt,
           tokenUsage: context.tokenUsage,
           compressionCount: context.compressionCount,
+          contextCheckpoint: context.contextCheckpoint,
+          activeSkills: context.activeSkills ?? [],
         },
       };
     }),
@@ -447,6 +457,12 @@ export const useAppStore = create<Store>((set) => ({
       updatedAt: store.session.updatedAt,
       tokenUsage: store.session.tokenUsage,
       compressionCount: store.session.compressionCount,
+      contextCheckpoint: store.session.contextCheckpoint,
+      activeSkills: store.session.activeSkills ?? [],
     };
   },
+  setActiveSkills: (skills) =>
+    set((state) => ({ session: { ...state.session, activeSkills: [...skills] } })),
+  setContextCheckpoint: (checkpoint) =>
+    set((state) => ({ session: { ...state.session, contextCheckpoint: checkpoint } })),
 }));

@@ -29,12 +29,12 @@ export class SystemPromptBuilder {
     sections.push(BASE_SYSTEM_PROMPT);
 
     if (this.config.includeProjectInfo || this.config.includeUserInfo) {
-      sections.push(generateContextPrompt(context));
+      sections.push(generateContextPrompt(context, this.config));
     }
 
     if (this.config.includeToolList && context.availableTools.length > 0) {
       sections.push(generateToolListPrompt(context.availableTools));
-      sections.push(generateToolUsageGuidelines());
+      sections.push(generateToolUsageGuidelines(context.availableTools));
     }
 
     sections.push(generateEnvironmentPrompt());

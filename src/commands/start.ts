@@ -29,5 +29,5 @@ export async function startCommand(options: StartOptions): Promise<void> {
     startupLogger.log(message, 'info');
   }
 
-  render(React.createElement(App));
+  render(React.createElement(App), { exitOnCtrlC: false });
 }
