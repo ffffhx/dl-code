@@ -39,7 +39,7 @@ export function initChatModel(): ChatOpenAI {
 
   const configuration: any = {
     modelName: model,
-    openAIApiKey: apiKey,
+    apiKey,
   };
 
   if (settings.api_base) {
