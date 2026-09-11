@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import { useUI } from '../store/index.js';
 import { useAppStore } from '../store/app-store.js';
 import { MessageArea, InputArea, TodoPanel } from './components/index.js';
-import { themeManager } from './themes/index.js';
+import { themeManager, useTheme } from './themes/index.js';
 import type { HarnessRuntime, HarnessEvent } from '../harness/index.js';
 import { isSlashCommand, executeSlashCommand } from './slash-commands/index.js';
 
@@ -12,7 +12,15 @@ export const App: React.FC<{ harness: HarnessRuntime }> = ({ harness }) => {
   const { exit } = useApp();
   const [childStatus, setChildStatus] = useState('');
   const shuttingDown = useRef(false);
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
+  const { stdout } = useStdout();
+
+  useEffect(() => {
+    const resize = () => useAppStore.getState().setTerminalSize(stdout.columns || 80, stdout.rows || 24);
+    resize();
+    stdout.on('resize', resize);
+    return () => { stdout.off('resize', resize); };
+  }, [stdout]);
 
   const shutdown = async () => {
     if (shuttingDown.current) return;
@@ -36,6 +44,7 @@ export const App: React.FC<{ harness: HarnessRuntime }> = ({ harness }) => {
           break;
         case 'run_started':
           state.clearThinkingSteps();
+          setChildStatus('');
           state.setIsProcessing(true);
           state.setIsGenerating(true);
           break;
@@ -76,7 +85,11 @@ export const App: React.FC<{ harness: HarnessRuntime }> = ({ harness }) => {
       if (['q', 'exit', 'quit'].includes(input)) { await shutdown(); return; }
       if (isSlashCommand(input)) {
         const result = executeSlashCommand(input, {
-          clearMessages: () => harness.clear(),
+          clearMessages: () => {
+            harness.clear();
+            state.clearMessages();
+            setChildStatus('');
+          },
           toggleTodoPanel: state.toggleTodoPanel,
           setTheme: name => { state.setTheme(name); themeManager.setTheme(name); },
           exitApp: () => { void shutdown(); },
@@ -99,7 +112,7 @@ export const App: React.FC<{ harness: HarnessRuntime }> = ({ harness }) => {
   };
 
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column" width={ui.terminalWidth}>
       {childStatus && <Text dimColor>Subagent {childStatus}</Text>}
       <Box borderStyle="single" borderColor={theme.colors.accent} paddingX={1}>
         <Text bold color={theme.colors.accent}>DeerCode - AI Coding Assistant</Text>

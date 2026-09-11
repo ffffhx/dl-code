@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 import { CommandInfo } from '../slash-commands/index.js';
 
 interface SlashCommandMenuProps {
@@ -14,7 +14,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   selectedIndex,
   visible,
 }) => {
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   if (!visible || commands.length === 0) {
     return null;

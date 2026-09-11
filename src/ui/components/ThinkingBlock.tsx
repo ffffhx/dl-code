@@ -1,14 +1,14 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { ThinkingStep } from '../../store/types.js';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 
 interface ThinkingBlockProps {
   steps: ThinkingStep[];
 }
 
 export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ steps }) => {
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   const renderStep = (step: ThinkingStep, index: number) => {
     if (step.type === 'tool_call') {

@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
-import { marked } from 'marked';
+import { Marked, type MarkedOptions } from 'marked';
+import { useUI } from '../../store/index.js';
 import TerminalRenderer from 'marked-terminal';
 import chalk from 'chalk';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 
 interface MarkdownRendererProps {
   content: string;
@@ -11,7 +12,8 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, color }) => {
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
+  const { terminalWidth } = useUI();
 
   const renderedContent = useMemo(() => {
     const renderer = new TerminalRenderer({
@@ -32,16 +34,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, col
       href: chalk.hex(theme.colors.accent).underline,
       unescape: true,
       emoji: true,
-      width: 80,
+      width: Math.max(1, terminalWidth - 2),
       showSectionPrefix: false,
       reflowText: true,
       tab: 2,
     });
 
-    marked.setOptions({ renderer: renderer as unknown as typeof marked.defaults.renderer });
+    // marked-terminal 7 supports token objects; its separate typings still use the old API.
+    const parser = new Marked();
+    parser.setOptions({ renderer: renderer as unknown as MarkedOptions['renderer'] });
 
     try {
-      const result = marked.parse(content);
+      const result = parser.parse(content);
       if (typeof result === 'string') {
         return result.trim();
       }
@@ -49,7 +53,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, col
     } catch {
       return content;
     }
-  }, [content, theme]);
+  }, [content, theme, terminalWidth]);
 
   return (
     <Box flexDirection="column">

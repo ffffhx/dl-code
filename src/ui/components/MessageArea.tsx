@@ -3,12 +3,13 @@ import { Box, Text } from 'ink';
 import { useApp, useSession, type Message } from '../../store/index.js';
 import { MessageRenderer } from './MessageRenderer.js';
 import { ThinkingBlock } from './ThinkingBlock.js';
-import { themeManager } from '../themes/index.js';
+import { MarkdownRenderer } from './MarkdownRenderer.js';
+import { useTheme } from '../themes/index.js';
 
 export const MessageArea: React.FC = () => {
   const app = useApp();
   const session = useSession();
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   const { displayMessages, currentStreamingBuffer, thinkingSteps } = session;
 
@@ -20,11 +21,18 @@ export const MessageArea: React.FC = () => {
         ))}
       </Box>
 
+      {currentStreamingBuffer && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={theme.colors.success}>Assistant:</Text>
+          <MarkdownRenderer content={currentStreamingBuffer} />
+        </Box>
+      )}
+
       {thinkingSteps.length > 0 && (
         <ThinkingBlock steps={thinkingSteps} />
       )}
 
-      {app.isProcessing && thinkingSteps.length === 0 && !currentStreamingBuffer && (
+      {app.isProcessing && !currentStreamingBuffer && (
         <Box marginTop={1}>
           <Text color={theme.colors.warning}>⏳ Thinking...</Text>
         </Box>

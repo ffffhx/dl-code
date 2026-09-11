@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { useApp } from '../../store/index.js';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 import { getAllCommands, getFilteredCommands, CommandInfo } from '../slash-commands/index.js';
 import { SlashCommandMenu } from './SlashCommandMenu.js';
 
@@ -14,7 +14,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ onSubmit }) => {
   const [input, setInput] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const app = useApp();
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   const showCommandMenu = input.startsWith('/');
   

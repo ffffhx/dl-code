@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { create } from 'zustand';
 import { HumanMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 import type { 
@@ -146,7 +147,7 @@ export const useAppStore = create<Store>((set) => ({
     set((state) => {
       const message = new HumanMessage(content);
       const displayMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${randomUUID()}`,
         role: 'user',
         content,
         timestamp: Date.now(),
@@ -164,7 +165,7 @@ export const useAppStore = create<Store>((set) => ({
     set((state) => {
       const message = new AIMessage(content);
       const displayMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${randomUUID()}`,
         role: 'assistant',
         content,
         timestamp: Date.now(),
@@ -181,7 +182,7 @@ export const useAppStore = create<Store>((set) => ({
   addToolMessage: (content) =>
     set((state) => {
       const displayMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${randomUUID()}`,
         role: 'tool',
         content,
         timestamp: Date.now(),
@@ -198,7 +199,7 @@ export const useAppStore = create<Store>((set) => ({
   addSystemMessage: (content) =>
     set((state) => {
       const displayMessage: Message = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${randomUUID()}`,
         role: 'system',
         content,
         timestamp: Date.now(),
@@ -264,6 +265,9 @@ export const useAppStore = create<Store>((set) => ({
         ...state.session,
         messages: [],
         displayMessages: [],
+        thinkingSteps: [],
+        currentStreamingBuffer: '',
+        currentStreamingMessageId: null,
         activeSkills: [],
         contextCheckpoint: undefined,
         compressionCount: 0,

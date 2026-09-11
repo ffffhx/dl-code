@@ -4,6 +4,12 @@ import { themePresets, defaultTheme } from './presets.js';
 class ThemeManager {
   private currentTheme: Theme = defaultTheme;
   private themes: Map<string, Theme> = new Map();
+  private listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  };
 
   constructor() {
     Object.entries(themePresets).forEach(([name, theme]) => {
@@ -19,6 +25,7 @@ class ThemeManager {
     const theme = this.themes.get(name);
     if (theme) {
       this.currentTheme = theme;
+      this.listeners.forEach(listener => listener());
       return true;
     }
     return false;

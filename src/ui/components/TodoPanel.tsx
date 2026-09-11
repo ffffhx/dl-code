@@ -1,11 +1,11 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { useSession, type Todo } from '../../store/index.js';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 
 export const TodoPanel: React.FC = () => {
   const session = useSession();
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   if (session.todos.length === 0) {
     return null;

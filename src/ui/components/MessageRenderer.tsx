@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { Message } from '../../store/types.js';
-import { themeManager } from '../themes/index.js';
+import { useTheme } from '../themes/index.js';
 import { MarkdownRenderer } from './MarkdownRenderer.js';
 
 interface MessageRendererProps {
@@ -9,7 +9,7 @@ interface MessageRendererProps {
 }
 
 export const MessageRenderer: React.FC<MessageRendererProps> = ({ message }) => {
-  const theme = themeManager.getTheme();
+  const theme = useTheme();
 
   const renderUserMessage = () => (
     <Box flexDirection="column" marginBottom={1}>
