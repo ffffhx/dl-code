@@ -19,10 +19,10 @@ import type { SessionContext } from '../src/session/types.js';
 
 function fixture(t: TestContext) {
   const temp = fs.realpathSync(os.tmpdir());
-  const home = fs.mkdtempSync(path.join(temp, 'deer-prompts-test-'));
+  const home = fs.mkdtempSync(path.join(temp, 'dl-prompts-test-'));
   t.after(() => {
     assert.equal(path.dirname(home), temp);
-    assert.ok(path.basename(home).startsWith('deer-prompts-test-'));
+    assert.ok(path.basename(home).startsWith('dl-prompts-test-'));
     fs.rmSync(home, { recursive: true, force: true });
   });
   const root = path.join(home, 'project');

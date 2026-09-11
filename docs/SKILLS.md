@@ -1,13 +1,13 @@
 # Skills
 
-Deer-code discovers local SKILL.md packages and gives the model a metadata-only catalog. Full instructions enter the context only after `load_skill` is called. Loading a skill never executes its scripts.
+dl-code discovers local SKILL.md packages and gives the model a metadata-only catalog. Full instructions enter the context only after `load_skill` is called. Loading a skill never executes its scripts.
 
 ## Install a skill
 
 Create one directory per skill in either location:
 
-- User: `~/.deer-code/skills/<folder>/SKILL.md`
-- Project: `<project>/.deer-code/skills/<folder>/SKILL.md`
+- User: `~/.dl-code/skills/<folder>/SKILL.md`
+- Project: `<project>/.dl-code/skills/<folder>/SKILL.md`
 
 Project skills override user skills with the same `name`. Discovery refreshes at the beginning of every user turn. Duplicate names within a scope use the first valid directory in sorted order and report a warning; malformed files are skipped. User-managed skill-directory symlinks are supported.
 
@@ -62,3 +62,5 @@ pnpm skills:preview
 ```
 
 The preview starts a read-only text inspection service at http://127.0.0.1:4322. `/skills` lists metadata, `/skills/<name>` shows instructions, and `?resource=references/checklist.md` reads a resource. It never calls a model or changes active sessions. Pass a project path after the command to inspect that project's skills.
+
+Data-directory compatibility: `.dl-code` is preferred; if absent, an existing `.deer-code` directory is reused in place. See [rename compatibility](../README.md).

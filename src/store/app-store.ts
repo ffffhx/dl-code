@@ -55,7 +55,7 @@ export interface Store {
   setIsGenerating: (isGenerating: boolean) => void;
 
   initSession: (context: SessionContext) => void;
-  syncHarnessSession: (context: SessionContext) => void;
+  syncAgentSession: (context: SessionContext) => void;
   addMessage: (message: BaseMessage) => void;
   setMessages: (messages: BaseMessage[]) => void;
   setTokenUsage: (usage: TokenUsage) => void;
@@ -413,7 +413,7 @@ export const useAppStore = create<Store>((set) => ({
       };
     }),
 
-  syncHarnessSession: (context) => {
+  syncAgentSession: (context) => {
     useAppStore.getState().initSession(context);
     set(state => ({ session: { ...state.session, displayMessages: context.messages
       .filter(message => (message._getType() === 'human' || message._getType() === 'ai') && message.content)

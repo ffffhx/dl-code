@@ -6,7 +6,7 @@ import type { SessionContext } from '../../session/types.js';
 import { AgentJournal } from './AgentJournal.js';
 import type { AgentRecord, RunnerFactory } from './types.js';
 
-export class AgentManager {
+export class SubagentManager {
   private records = new Map<string, AgentRecord>();
   private running = new Map<string, { controller: AbortController; done: Promise<void> }>();
   private events = new EventEmitter();
@@ -68,7 +68,7 @@ export class AgentManager {
   list() { return [...this.records.keys()].map(id => this.inspect(id)); }
   recoveredRootContext(): SessionContext | undefined { return this.records.get(this.rootId)?.context; }
 
-  subscribe(listener: (record: ReturnType<AgentManager['inspect']>) => void): () => void {
+  subscribe(listener: (record: ReturnType<SubagentManager['inspect']>) => void): () => void {
     this.events.on('change', listener);
     return () => { this.events.off('change', listener); };
   }

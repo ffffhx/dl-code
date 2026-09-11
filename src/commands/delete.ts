@@ -17,7 +17,7 @@ export function deleteCommand(sessionId: string, force: boolean = false): void {
     console.log(chalk.green(`✓ Deleted session: ${chalk.bold(sessionId)}`));
   } else {
     console.log(chalk.red(`✗ Session not found: ${sessionId}`));
-    console.log(chalk.gray('  Use "deer-code list" to see available sessions'));
+    console.log(chalk.gray('  Use "dl-code list" to see available sessions'));
     process.exit(1);
   }
 }

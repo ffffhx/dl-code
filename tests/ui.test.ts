@@ -1,98 +1,49 @@
 import assert from 'node:assert/strict';
-import { test, type TestContext } from 'node:test';
-import { PassThrough } from 'node:stream';
-import { setTimeout as delay } from 'node:timers/promises';
-import React from 'react';
-import { render, Text } from 'ink';
-import { marked } from 'marked';
-import { App } from '../src/ui/App.js';
-import { MessageArea } from '../src/ui/components/MessageArea.js';
-import { MarkdownRenderer } from '../src/ui/components/MarkdownRenderer.js';
-import { themeManager, useTheme } from '../src/ui/themes/index.js';
-import { useAppStore } from '../src/store/app-store.js';
-import type { HarnessRuntime } from '../src/harness/index.js';
+import { test } from 'node:test';
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
+import { Transcript, terminalText, toolPreview } from '../src/ui/transcript.js';
+import { messageText } from '../src/message-text.js';
+import type { AgentSessionEvent, AgentSessionPayload } from '../src/runtime/types.js';
+import type { SessionContext } from '../src/session/types.js';
 
-function mount(t: TestContext, element: React.ReactElement, columns = 80) {
-  const stdout = Object.assign(new PassThrough(), { columns, rows: 24 });
-  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-  const frames: string[] = [];
-  stdout.on('data', data => frames.push(data.toString()));
-  const view = render(element, { stdout: stdout as unknown as NodeJS.WriteStream,
-    stdin: stdin as unknown as NodeJS.ReadStream, debug: true, patchConsole: false, exitOnCtrlC: false });
-  t.after(() => { view.unmount(); view.cleanup(); });
-  return { stdout, frame: () => frames.at(-1) ?? '' };
-}
+const context = (): SessionContext => ({ sessionId: 's', userName: null, messages: [], todos: [], createdAt: 0, updatedAt: 0 });
+const event = (payload: AgentSessionPayload): AgentSessionEvent => ({ ...payload, sequence: 1, timestamp: 0, sessionId: 's' });
 
-test('streaming text is visible and replaced by one completed reply', async t => {
-  const store = useAppStore.getState();
-  store.clearMessages();
-  store.setIsProcessing(true);
-  store.startStreaming('reply');
-  store.updateStreamingBuffer('Partial response');
-  const ui = mount(t, React.createElement(MessageArea));
-  await delay(30);
-  assert.match(ui.frame(), /Partial response/);
-  store.endStreaming();
-  store.setIsProcessing(false);
-  await delay(30);
-  assert.equal(ui.frame().split('Partial response').length - 1, 1);
+test('streamed Markdown becomes one completed message without persisting partial chunks', () => {
+  const state = new Transcript(); const c = context();
+  c.messages.push(new HumanMessage({ id: 'user', content: 'Hello' })); state.sync(c);
+  for (const text of ['中文 **bo', 'ld**']) state.apply(event({ type: 'text_delta', messageId: 'reply', text }));
+  assert.equal(state.entries[1].text, '中文 **bold**');
+  assert.equal(state.entries[1].streaming, true); assert.equal(c.messages.length, 1);
+  c.messages.push(new AIMessage({ id: 'reply', content: '中文 **bold**' })); state.sync(c);
+  assert.equal(state.entries.length, 2); assert.equal(state.entries[1].streaming, undefined);
+  state.sync(c); assert.equal(state.entries.length, 2);
 });
 
-test('clear removes stale activity and messages have unique keys at the same time', t => {
-  const store = useAppStore.getState();
-  store.clearMessages();
-  t.mock.method(Date, 'now', () => 12345);
-  store.addSystemMessage('First');
-  store.addSystemMessage('Second');
-  assert.equal(new Set(useAppStore.getState().session.displayMessages.map(m => m.id)).size, 2);
-  store.addThinkingStep({ type: 'reasoning', timestamp: 1, content: 'Old work' });
-  store.startStreaming('old');
-  store.updateStreamingBuffer('Old text');
-  store.clearMessages();
-  const session = useAppStore.getState().session;
-  assert.deepEqual(session.thinkingSteps, []);
-  assert.equal(session.currentStreamingBuffer, '');
-  assert.equal(session.currentStreamingMessageId, null);
+test('tool results update their call, remain in order, and have bounded previews', () => {
+  const state = new Transcript(); const c = context();
+  c.messages.push(new AIMessage({ id: 'a', content: 'Checking', tool_calls: [{ id: 't', name: 'ls', args: { path: '.' } }] }));
+  state.sync(c); assert.equal(state.entries[1].streaming, true);
+  c.messages.push(new ToolMessage({ tool_call_id: 't', content: 'file.ts', status: 'success' }));
+  c.messages.push(new AIMessage({ id: 'b', content: 'Finished' })); state.sync(c);
+  assert.deepEqual(state.entries.map(e => e.role), ['assistant', 'tool', 'assistant']);
+  assert.match(state.entries[1].text, /file.ts/); assert.equal(state.entries[1].streaming, false);
+  assert.ok(toolPreview('x'.repeat(90000)).length < 1300);
 });
 
-test('theme subscribers refresh without another store update', async t => {
-  function ThemeLabel() { return React.createElement(Text, null, useTheme().name); }
-  themeManager.setTheme('ayu-dark');
-  t.after(() => { themeManager.setTheme('ayu-dark'); });
-  const ui = mount(t, React.createElement(ThemeLabel));
-  await delay(30);
-  themeManager.setTheme('dracula');
-  await delay(30);
-  assert.match(ui.frame(), /dracula/);
+test('cancel preserves partial text as interrupted; clear removes transient state', () => {
+  const state = new Transcript();
+  const c = context();
+  c.messages.push(new AIMessage({ id: 'call', content: '', tool_calls: [{ id: 't', name: 'edit', args: {} }] }));
+  state.sync(c);
+  state.apply(event({ type: 'text_delta', messageId: 'partial', text: 'unfinished ```' }));
+  state.apply(event({ type: 'run_finished', run: { id: 'r', startedAt: 0, status: 'cancelled', error: 'Cancelled' } }));
+  assert.equal(state.entries[0].failed, true); assert.match(state.entries[0].text, /outcome unknown/);
+  assert.equal(state.entries[1].streaming, false); assert.match(state.entries[1].label!, /interrupted/);
+  state.clear(); state.sync(context()); assert.deepEqual(state.entries, []);
 });
 
-test('Markdown uses available columns and does not mutate the global parser', async t => {
-  const original = marked.parse('**bold**');
-  useAppStore.getState().setTerminalSize(30, 24);
-  const ui = mount(t, React.createElement(MarkdownRenderer, { content: 'alpha beta gamma delta epsilon zeta eta theta iota kappa' }), 120);
-  await delay(30);
-  assert.ok(ui.frame().split('\n').every(line => line.length <= 28), ui.frame());
-  useAppStore.getState().setTerminalSize(100, 24);
-  await delay(30);
-  assert.match(ui.frame(), /alpha beta gamma delta epsilon zeta/);
-  assert.equal(marked.parse('**bold**'), original);
-});
-
-test('App follows output resize and keeps loading visible after a tool result', async t => {
-  const store = useAppStore.getState();
-  store.clearMessages();
-  store.setIsProcessing(true);
-  store.addThinkingStep({ type: 'tool_result', timestamp: 1, result: 'Done', content: 'Done' });
-  const harness = { snapshot: () => store.getSessionContext(), subscribe: () => () => {},
-    shutdown: async () => {} } as unknown as HarnessRuntime;
-  const ui = mount(t, React.createElement(App, { harness }), 60);
-  await delay(30);
-  assert.equal(useAppStore.getState().ui.terminalWidth, 60);
-  assert.match(ui.frame(), /Thinking\.\.\./);
-  ui.stdout.columns = 40;
-  ui.stdout.emit('resize');
-  await delay(30);
-  assert.equal(useAppStore.getState().ui.terminalWidth, 40);
-  assert.match(ui.frame(), /Processing\.\.\./);
-  store.setIsProcessing(false);
+test('text extraction ignores metadata and terminal controls', () => {
+  assert.equal(messageText([{ type: 'text', text: 'hello' }, { type: 'reasoning', text: 'private' }, { type: 'image', url: 'x' }]), 'hello');
+  assert.equal(terminalText('\x1b[2Jhello\x1b]52;c;ZXZpbA==\x07中文\n'), 'hello中文\n');
 });

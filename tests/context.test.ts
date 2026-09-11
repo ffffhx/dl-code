@@ -20,10 +20,10 @@ import { createSkillMiddleware } from '../src/skills/middleware.js';
 import type { SessionContext } from '../src/session/types.js';
 
 function temporary(t: TestContext) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deer-context-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-context-test-'));
   t.after(() => {
     assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir()));
-    assert.ok(path.basename(root).startsWith('deer-context-test-'));
+    assert.ok(path.basename(root).startsWith('dl-context-test-'));
     fs.rmSync(root, { recursive: true, force: true });
   });
   return root;
@@ -336,7 +336,7 @@ test('persisted transcript includes inbox messages exactly once and keeps checkp
       takeMessages: () => {
         if (delivered) return [];
         delivered = true;
-        context.messages.push(note); // Same behavior as AgentManager.takeMessages.
+        context.messages.push(note); // Same behavior as SubagentManager.takeMessages.
         return [note];
       },
     })],

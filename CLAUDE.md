@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Deer-code is an AI coding agent project that provides a minimalist yet sufficient framework for developing AI-powered coding assistants. It uses LangChain and LangGraph for agent orchestration and supports MCP (Model Context Protocol) for extensible tool integration.
+dl-code is an AI coding agent project that provides a minimalist yet sufficient framework for developing AI-powered coding assistants. It uses LangChain and LangGraph for agent orchestration and supports MCP (Model Context Protocol) for extensible tool integration.
 
 ## Development Commands
 
@@ -12,7 +12,7 @@ Deer-code is an AI coding agent project that provides a minimalist yet sufficien
 # Install dependencies (uses pnpm)
 pnpm install
 
-# Development mode - run the agent directly with tsx
+# Development mode - run the agent with project-local Bun
 pnpm dev
 
 # Build the project
@@ -30,11 +30,15 @@ pnpm start
 
 ## Architecture Overview
 
+### Agent Runtime
+
+`src/runtime/AgentSession.ts` owns one live conversation: input, runs, cancellation, persistence and recovery. `createAgentSession()` wires CodingAgent, SubagentManager and SessionManager. SessionManager stores snapshots; it does not execute agents.
+
 ### Core Components
 
 1. **Agent System** (`src/agents/`)
    - `CodingAgent`: Main agent class that orchestrates AI interactions
-   - Uses LangChain's ReactAgent pattern with LangGraph
+   - Uses LangChain createAgent with LangGraph for the Agent Loop
    - Manages context compression and token limits
 
 2. **Tool System** (`src/tools/`)
@@ -57,14 +61,14 @@ pnpm start
 
 ### Skills
 
-- `src/skills/` discovers user and project `.deer-code/skills/*/SKILL.md` packages; project names override user names.
+- `src/skills/` discovers user and project `.dl-code/skills/*/SKILL.md` packages; project names override user names.
 - `load_skill`, `read_skill_resource`, and `unload_skill` provide on-demand instructions and bounded relative text-resource reads. Loading never runs scripts.
 - `createSkillMiddleware` rebuilds active instructions before each model request and includes them in context budgeting. Persist only skill path/hash references in sessions; changed files deactivate until reloaded.
-- `pnpm test` runs offline skill and graph integration tests. `deer-code skills [name]` inspects skills without model credentials. See `docs/SKILLS.md` for usage and `pnpm skills:preview` for local inspection.
+- `pnpm test` runs offline skill and graph integration tests. `dl-code skills [name]` inspects skills without model credentials. See `docs/SKILLS.md` for usage and `pnpm skills:preview` for local inspection.
 
 ### Configuration
 
-Subagent implementation lives in `src/agents/subagents/`. `AgentManager` owns lifecycle, inboxes, concurrency (two read-only children) and per-root JSONL journals. Only the root gets delegation tools. Children get no shell, editor, Todo, MCP or spawn tools. `CodingAgent.cleanup()` releases only its owned resources; application shutdown owns MCP disconnection. Shell tools are per-agent factories, and cancellation is propagated to the model and async search. See `docs/SUBAGENTS.md`, `pnpm test`, and `pnpm subagents:preview`.
+Subagent implementation lives in `src/agents/subagents/`. `SubagentManager` owns lifecycle, inboxes, concurrency (two read-only children) and per-root JSONL journals. Only the root gets delegation tools. Children get no shell, editor, Todo, MCP or spawn tools. `CodingAgent.cleanup()` releases only its owned resources; application shutdown owns MCP disconnection. Shell tools are per-agent factories, and cancellation is propagated to the model and async search. See `docs/SUBAGENTS.md`, `pnpm test`, and `pnpm subagents:preview`.
 
 Configuration is managed through `config.yaml`:
 - Model settings (API keys, base URLs, parameters)
@@ -82,6 +86,6 @@ Configuration is managed through `config.yaml`:
 
 - The project uses ES modules (`"type": "module"` in package.json)
 - TypeScript compilation targets ES2022
-- React is used for terminal UI components (Ink framework)
+- OpenTUI Core renderables power the terminal UI; project-local Bun runs the interactive entry. See docs/TERMINAL_UI.md.
 - All file operations should respect the project root directory from `project.rootDir`
 - MCP servers are initialized at startup and disconnected on cleanup

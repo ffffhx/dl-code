@@ -2,7 +2,7 @@
 
 ## 概述
 
-`tools` 模块实现了 DeerCode 的内置工具集，基于 LangChain 的 `DynamicStructuredTool` 构建。这些工具让 AI Agent 能够与文件系统、终端和任务管理系统交互。
+`tools` 模块实现了 dl-code 的内置工具集，基于 LangChain 的 `DynamicStructuredTool` 构建。这些工具让 AI Agent 能够与文件系统、终端和任务管理系统交互。
 
 ## 文件结构
 

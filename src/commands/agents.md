@@ -2,7 +2,7 @@
 
 ## 概述
 
-`commands` 模块实现了 DeerCode CLI 的命令行接口，使用 yargs 构建命令解析。提供会话管理和应用启动等功能。
+`commands` 模块实现了 dl-code CLI 的命令行接口，使用 yargs 构建命令解析。提供会话管理和应用启动等功能。
 
 ## 文件结构
 
@@ -21,14 +21,14 @@ commands/
 
 ### start (start.ts)
 
-启动 DeerCode 应用的主命令。
+启动 dl-code 应用的主命令。
 
 **功能：**
 
 1. 读取配置文件中的 MCP 服务器配置
 2. 初始化 MCP 服务器连接
 3. 可选创建新会话
-4. 渲染 React/Ink UI 界面
+4. 渲染 OpenTUI UI 界面
 
 **选项：**
 
@@ -61,7 +61,7 @@ commands/
 
 ```
 commands
-├── ui              # React/Ink UI 组件
+├── ui              # OpenTUI UI 组件
 ├── session         # 会话管理
 ├── mcp             # MCP 服务器初始化
 ├── config          # 配置读取
@@ -74,22 +74,22 @@ CLI 命令（通过 yargs 配置）：
 
 ```bash
 # 启动应用
-deer-code start
+dl-code start
 
 # 创建新会话启动
-deer-code start --new --name "my-session"
+dl-code start --new --name "my-session"
 
 # 列出会话
-deer-code list
+dl-code list
 
 # 切换会话
-deer-code switch <session-id>
+dl-code switch <session-id>
 
 # 删除会话
-deer-code delete <session-id>
+dl-code delete <session-id>
 
 # 查看会话信息
-deer-code info [session-id]
+dl-code info [session-id]
 ```
 
 ## 设计要点
@@ -97,4 +97,4 @@ deer-code info [session-id]
 1. **模块化命令** - 每个命令独立文件，便于维护和扩展
 2. **会话持久化** - 通过 SessionManager 管理会话生命周期
 3. **MCP 预初始化** - 在应用启动时预连接 MCP 服务器
-4. **React/Ink 渲染** - 使用声明式 UI 框架构建终端界面
+4. **OpenTUI 渲染** - 使用声明式 UI 框架构建终端界面

@@ -1,8 +1,8 @@
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { AgentManager } from './AgentManager.js';
+import { SubagentManager } from './SubagentManager.js';
 
-export function createSubagentTools(manager: AgentManager, signal?: AbortSignal) {
+export function createSubagentTools(manager: SubagentManager, signal?: AbortSignal) {
   const safely = async (fn: () => unknown | Promise<unknown>) => {
     try { signal?.throwIfAborted(); return JSON.stringify(await fn()); }
     catch (error) { return `Subagent error: ${error instanceof Error ? error.message : String(error)}`; }

@@ -1,12 +1,12 @@
-import os from 'node:os';
+import { resolveDataDirectory } from '../../paths.js';
 import path from 'node:path';
 import { CodingAgent } from '../coding-agent.js';
-import { AgentManager } from './AgentManager.js';
+import { SubagentManager } from './SubagentManager.js';
 import { AgentJournal } from './AgentJournal.js';
 
-export function createAgentManager(rootId: string): AgentManager {
+export function createSubagentManager(rootId: string): SubagentManager {
   if (!/^[a-zA-Z0-9_-]+$/.test(rootId)) throw new Error('Invalid root session ID');
-  return new AgentManager(rootId, new AgentJournal(path.join(os.homedir(), '.deer-code', 'agents', rootId)), () => {
+  return new SubagentManager(rootId, new AgentJournal(path.join(resolveDataDirectory(), 'agents', rootId)), () => {
     const agent = new CodingAgent([], { readOnly: true });
     return {
       run: async (context, control) => {

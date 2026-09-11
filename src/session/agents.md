@@ -16,7 +16,7 @@ session/
 ## 存储位置
 
 ```
-~/.deer-code/
+~/.dl-code/
 ├── sessions/
 │   ├── session-1234567890.json
 │   └── session-1234567891.json
@@ -123,3 +123,5 @@ sessionManager.deleteSession('session-1234567890');
 3. **消息序列化** - 正确处理 LangChain 消息的序列化和反序列化
 4. **自动创建** - 获取当前会话时，不存在则自动创建
 5. **按更新时间排序** - 会话列表按最后更新时间倒序
+
+Data-directory compatibility: `.dl-code` is preferred; if absent, an existing `.deer-code` directory is reused in place. See [rename compatibility](../../README.md).

@@ -3,7 +3,7 @@ import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langcha
 import { serializeMessages, deserializeMessages } from '../session/SessionManager.js';
 import type { SessionContext, SessionRun } from '../session/types.js';
 import { createSubagentTools } from '../agents/subagents/tools.js';
-import type { HarnessDependencies, HarnessEvent, HarnessPayload } from './types.js';
+import type { AgentSessionDependencies, AgentSessionEvent, AgentSessionPayload } from './types.js';
 
 function copy(context: SessionContext): SessionContext {
   const data = JSON.parse(JSON.stringify({ ...context, messages: serializeMessages(context.messages) }));
@@ -11,16 +11,16 @@ function copy(context: SessionContext): SessionContext {
 }
 
 /** Owns one session. LangChain remains the execution engine; consumers only see events. */
-export class HarnessRuntime {
+export class AgentSession {
   private context: SessionContext;
   private active?: { id: string; controller: AbortController; done: Promise<void> };
-  private listeners = new Set<(event: HarnessEvent) => void>();
+  private listeners = new Set<(event: AgentSessionEvent) => void>();
   private sequence = 0;
   private closing?: Promise<void>;
   private closed = false;
   private unsubscribe: () => void;
 
-  constructor(private deps: HarnessDependencies) {
+  constructor(private deps: AgentSessionDependencies) {
     this.context = copy(deps.agents.recoveredRootContext() ?? deps.context);
     if (this.context.lastRun?.status === 'running') {
       this.context.lastRun = { ...this.context.lastRun, status: 'interrupted', error: 'Execution stopped before completion; inspect unknown tool outcomes before continuing.' };
@@ -36,12 +36,12 @@ export class HarnessRuntime {
   snapshot(): SessionContext { return copy(this.context); }
   get activeRunId(): string | undefined { return this.active?.id; }
 
-  subscribe(listener: (event: HarnessEvent) => void): () => void {
+  subscribe(listener: (event: AgentSessionEvent) => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   }
 
-  private emit(payload: HarnessPayload): void {
+  private emit(payload: AgentSessionPayload): void {
     const event = { ...payload, sessionId: this.context.sessionId, runId: this.active?.id, sequence: ++this.sequence, timestamp: Date.now() };
     // A broken view must not turn a completed side effect into an execution failure.
     for (const listener of this.listeners) { try { listener(event); } catch { /* subscriber owns its errors */ } }
@@ -55,23 +55,23 @@ export class HarnessRuntime {
     this.emit({ type: 'session_updated', context: this.snapshot() });
   }
 
-  run(input: { text: string }): AsyncGenerator<HarnessEvent> {
+  run(input: { text: string }): AsyncGenerator<AgentSessionEvent> {
     return this.stream(input.text);
   }
 
-  resume(runId: string): AsyncGenerator<HarnessEvent> {
+  resume(runId: string): AsyncGenerator<AgentSessionEvent> {
     return this.stream(undefined, runId);
   }
 
-  private async *stream(text?: string, resumedFrom?: string): AsyncGenerator<HarnessEvent> {
-    if (this.closed) throw new Error('Harness is closed');
+  private async *stream(text?: string, resumedFrom?: string): AsyncGenerator<AgentSessionEvent> {
+    if (this.closed) throw new Error('AgentSession is closed');
     if (this.active) throw new Error('A run is already active in this session');
     if (resumedFrom) {
       if (this.context.lastRun?.id !== resumedFrom || this.context.lastRun.status === 'completed') throw new Error('Only the latest incomplete run can be resumed');
     } else if (!text?.trim()) throw new Error('A non-empty user request is required');
     const id = `run-${randomUUID()}`;
     const controller = new AbortController();
-    const queue: HarnessEvent[] = [];
+    const queue: AgentSessionEvent[] = [];
     let wake: (() => void) | undefined;
     let ended = false;
     const unsubscribe = this.subscribe(event => {
@@ -119,6 +119,7 @@ export class HarnessRuntime {
       };
       for await (const chunk of this.deps.engine.execute(this.context, changed, {
         signal: controller.signal,
+        onTextDelta: (messageId, text) => this.emit({ type: 'text_delta', messageId, text }),
         takeMessages: () => this.deps.agents.takeMessages(this.context.sessionId),
         tools: createSubagentTools(this.deps.agents, controller.signal),
       })) {
@@ -182,7 +183,7 @@ export class HarnessRuntime {
   }
 
   clear(): void {
-    if (this.closed || this.active) throw new Error('Cannot clear an active or closed harness');
+    if (this.closed || this.active) throw new Error('Cannot clear an active or closed agent session');
     const context: SessionContext = { sessionId: this.context.sessionId, userName: this.context.userName,
       createdAt: this.context.createdAt, updatedAt: Date.now(), messages: [], todos: [], activeSkills: [], compressionCount: 0 };
     this.deps.agents.resetRoot(context);
@@ -199,7 +200,7 @@ export class HarnessRuntime {
       this.unsubscribe();
       this.listeners.clear();
       const failures = results.filter(result => result.status === 'rejected');
-      if (failures.length) throw new AggregateError(failures.map(result => result.reason), 'Harness cleanup failed');
+      if (failures.length) throw new AggregateError(failures.map(result => result.reason), 'AgentSession cleanup failed');
     })();
     return this.closing;
   }

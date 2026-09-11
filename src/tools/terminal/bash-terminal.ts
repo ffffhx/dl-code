@@ -49,15 +49,15 @@ export class BashTerminal {
     if (this.pending) return Promise.reject(new Error('This agent already has a running shell command'));
     signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
-      const marker = `DEER_DONE_${randomUUID().replaceAll('-', '')}`;
+      const marker = `DL_DONE_${randomUUID().replaceAll('-', '')}`;
       const abort = () => { this.fail(new Error('Shell command cancelled')); void this.close(); };
       const timer = setTimeout(() => { this.fail(new Error('Shell command timed out')); void this.close(); }, timeout);
       this.pending = { marker, output: '', resolve, reject, dispose: () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); } };
       signal?.addEventListener('abort', abort, { once: true });
       const encoded = Buffer.from(command).toString('base64');
       const script = process.platform === 'win32'
-        ? `$global:LASTEXITCODE=0; try { Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))); $deerCommandStatus=if ($?) { $global:LASTEXITCODE } else { 1 } } catch { [Console]::Error.WriteLine($_.ToString()); $deerCommandStatus=1 }; [Console]::Out.WriteLine('${marker}:' + $deerCommandStatus); [Console]::Error.WriteLine('${marker}:' + $deerCommandStatus)\n`
-        : `eval "$(printf '%s' '${encoded}' | base64 --decode)"; deer_command_status=$?; printf '\\n${marker}:%s\\n' "$deer_command_status"; printf '\\n${marker}:%s\\n' "$deer_command_status" >&2\n`;
+        ? `$global:LASTEXITCODE=0; try { Invoke-Expression ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))); $dlCommandStatus=if ($?) { $global:LASTEXITCODE } else { 1 } } catch { [Console]::Error.WriteLine($_.ToString()); $dlCommandStatus=1 }; [Console]::Out.WriteLine('${marker}:' + $dlCommandStatus); [Console]::Error.WriteLine('${marker}:' + $dlCommandStatus)\n`
+        : `eval "$(printf '%s' '${encoded}' | base64 --decode)"; dl_command_status=$?; printf '\\n${marker}:%s\\n' "$dl_command_status"; printf '\\n${marker}:%s\\n' "$dl_command_status" >&2\n`;
       this.child.stdin.write(script, error => { if (error) this.fail(error); });
     });
   }

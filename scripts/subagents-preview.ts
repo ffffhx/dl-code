@@ -3,11 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AIMessage } from '@langchain/core/messages';
-import { AgentManager } from '../src/agents/subagents/AgentManager.js';
+import { SubagentManager } from '../src/agents/subagents/SubagentManager.js';
 import { AgentJournal } from '../src/agents/subagents/AgentJournal.js';
 
-const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'deer-subagents-preview-'));
-const manager = new AgentManager('demo-root', new AgentJournal(directory), record => ({
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-subagents-preview-'));
+const manager = new SubagentManager('demo-root', new AgentJournal(directory), record => ({
   run: async (context, control) => {
     const mail = control.takeMessages();
     await new Promise<void>((resolve, reject) => {
@@ -25,7 +25,7 @@ const first = manager.spawn('message-demo');
 const second = manager.spawn('cancel-demo');
 manager.sendMessage(first.id, 'Focus on the project entry point. This is an offline demonstration.');
 setTimeout(() => { void manager.cancel(second.id); }, 500);
-const port = Number(process.env.DEER_SUBAGENTS_PREVIEW_PORT ?? 4323);
+const port = Number(process.env.DL_SUBAGENTS_PREVIEW_PORT ?? 4323);
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');

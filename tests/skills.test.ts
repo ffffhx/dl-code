@@ -15,15 +15,15 @@ import { useAppStore } from '../src/store/app-store.js';
 import type { SessionContext } from '../src/session/types.js';
 
 function fixture(t: TestContext) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deer-skills-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-skills-test-'));
   t.after(() => {
     assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir()));
-    assert.ok(path.basename(root).startsWith('deer-skills-test-'));
+    assert.ok(path.basename(root).startsWith('dl-skills-test-'));
     fs.rmSync(root, { recursive: true, force: true });
   });
   const userRoot = path.join(root, 'user');
   const projectRoot = path.join(root, 'project');
-  const projectSkills = path.join(projectRoot, '.deer-code', 'skills');
+  const projectSkills = path.join(projectRoot, '.dl-code', 'skills');
   const write = (scope: 'user' | 'project', folder: string, body = 'BODY_ONLY_MARKER', name = folder) => {
     const dir = path.join(scope === 'user' ? userRoot : projectSkills, folder);
     fs.mkdirSync(dir, { recursive: true });

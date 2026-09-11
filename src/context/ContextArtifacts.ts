@@ -1,6 +1,6 @@
+import { resolveDataDirectory } from '../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -9,7 +9,7 @@ import { z } from 'zod';
 export class ContextArtifacts {
   readonly directory: string;
 
-  constructor(sessionId: string, root = path.join(os.homedir(), '.deer-code', 'context')) {
+  constructor(sessionId: string, root = path.join(resolveDataDirectory(), 'context')) {
     this.directory = path.join(root, createHash('sha256').update(sessionId).digest('hex'));
   }
 

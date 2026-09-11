@@ -89,7 +89,7 @@ const commands: SlashCommand[] = [
     aliases: ['v'],
     description: 'Show version information',
     execute: () => {
-      return { success: true, message: '🦌 DeerCode v0.1.0' };
+      return { success: true, message: '🦌 dl-code v0.1.0' };
     },
   },
   {

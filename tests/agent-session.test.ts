@@ -3,11 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
-import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
+import { ChatGenerationChunk } from '@langchain/core/outputs';
+import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { HarnessRuntime } from '../src/harness/HarnessRuntime.js';
-import type { AgentEngine, HarnessEvent } from '../src/harness/types.js';
-import { AgentManager } from '../src/agents/subagents/AgentManager.js';
+import { AgentSession } from '../src/runtime/AgentSession.js';
+import type { AgentEngine, AgentSessionEvent } from '../src/runtime/types.js';
+import { SubagentManager } from '../src/agents/subagents/SubagentManager.js';
 import { AgentJournal } from '../src/agents/subagents/AgentJournal.js';
 import { SessionManager } from '../src/session/SessionManager.js';
 import type { SessionContext } from '../src/session/types.js';
@@ -16,16 +18,16 @@ import { CodingAgent } from '../src/agents/coding-agent.js';
 import { useAppStore } from '../src/store/app-store.js';
 
 function setup(t: TestContext) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deer-harness-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-agent-session-test-'));
   t.after(() => {
     assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir()));
-    assert.ok(path.basename(root).startsWith('deer-harness-test-'));
+    assert.ok(path.basename(root).startsWith('dl-agent-session-test-'));
     fs.rmSync(root, { recursive: true, force: true });
   });
   const sessions = new SessionManager(root);
   const context = sessions.createSession();
   const journal = () => new AgentJournal(path.join(root, 'journal'));
-  const agents = () => new AgentManager(context.sessionId, journal(), () => ({
+  const agents = () => new SubagentManager(context.sessionId, journal(), () => ({
     run: async () => 'child result', cleanup: async () => {},
   }));
   return { root, sessions, context, agents };
@@ -46,8 +48,8 @@ class FakeEngine implements AgentEngine {
   async cleanup() { this.cleaned++; }
 }
 
-async function collect(events: AsyncIterable<HarnessEvent>) {
-  const result: HarnessEvent[] = [];
+async function collect(events: AsyncIterable<AgentSessionEvent>) {
+  const result: AgentSessionEvent[] = [];
   for await (const event of events) result.push(event);
   return result;
 }
@@ -63,7 +65,7 @@ test('headless run owns input, persists results, emits detached snapshots and re
   const f = setup(t);
   const engine = new FakeEngine();
   let closed = 0;
-  const runtime = new HarnessRuntime({ context: f.context, engine, agents: f.agents(),
+  const runtime = new AgentSession({ context: f.context, engine, agents: f.agents(),
     save: context => f.sessions.saveSession(context, true), closeConnections: async () => { closed++; } });
   t.after(() => runtime.shutdown());
   const events = await collect(runtime.run({ text: 'Implement feature' }));
@@ -79,7 +81,7 @@ test('headless run owns input, persists results, emits detached snapshots and re
   const snapshot = runtime.snapshot();
   snapshot.messages[0].content = 'tampered';
   assert.equal(runtime.snapshot().messages[0].content, 'Implement feature');
-  useAppStore.getState().syncHarnessSession(runtime.snapshot());
+  useAppStore.getState().syncAgentSession(runtime.snapshot());
   assert.equal(useAppStore.getState().session.displayMessages.length, 2);
   assert.equal(useAppStore.getState().getSessionContext().lastRun!.id, saved.lastRun!.id);
   await runtime.shutdown();
@@ -97,7 +99,7 @@ test('concurrent runs are rejected; cancellation does not depend on consuming mo
     await abortable(options.signal!);
     yield {};
   });
-  const runtime = new HarnessRuntime({ context: f.context, engine, agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const runtime = new AgentSession({ context: f.context, engine, agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   t.after(() => runtime.shutdown());
   const iterator = runtime.run({ text: 'Wait' });
   await iterator.next();
@@ -114,7 +116,7 @@ test('concurrent runs are rejected; cancellation does not depend on consuming mo
 test('abandoning an event iterator cancels the producer and permits another run', async t => {
   const f = setup(t);
   let aborted = false;
-  const runtime = new HarnessRuntime({ context: f.context, agents: f.agents(), save: c => f.sessions.saveSession(c, true),
+  const runtime = new AgentSession({ context: f.context, agents: f.agents(), save: c => f.sessions.saveSession(c, true),
     engine: new FakeEngine(async function* (_context, _changed, options) {
       try { await abortable(options.signal!); } finally { aborted = true; }
       yield {};
@@ -131,7 +133,7 @@ test('abandoning an event iterator cancels the producer and permits another run'
 test('failed runs retain partial history; explicit resume marks unknown tools without replaying them', async t => {
   const f = setup(t);
   let turns = 0;
-  const runtime = new HarnessRuntime({ context: f.context, agents: f.agents(), save: c => f.sessions.saveSession(c, true),
+  const runtime = new AgentSession({ context: f.context, agents: f.agents(), save: c => f.sessions.saveSession(c, true),
     engine: new FakeEngine(async function* (context, changed) {
       if (++turns === 1) {
         context.messages.push(new AIMessage({ content: '', tool_calls: [{ id: 'write-1', name: 'edit', args: {} }] }));
@@ -166,7 +168,7 @@ test('journal recovery restores the authoritative context and interrupts unfinis
     lastRun: { id: 'run-crash', status: 'running' as const, startedAt: 1 } };
   first.attachRoot(context);
   await first.shutdown();
-  const runtime = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const runtime = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   t.after(() => runtime.shutdown());
   assert.equal(runtime.snapshot().messages[0].content, 'journal-only');
   assert.equal(runtime.snapshot().lastRun!.status, 'interrupted');
@@ -176,11 +178,11 @@ test('journal recovery restores the authoritative context and interrupts unfinis
 
 test('clear persists across restart and discards compressed context and stale inbox', async t => {
   const f = setup(t);
-  const runtime = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const runtime = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   await collect(runtime.run({ text: 'First' }));
   runtime.clear();
   await runtime.shutdown();
-  const restored = new HarnessRuntime({ context: f.sessions.getCurrentSession(), engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const restored = new AgentSession({ context: f.sessions.getCurrentSession(), engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   t.after(() => restored.shutdown());
   assert.equal(restored.snapshot().messages.length, 0);
   assert.equal(restored.snapshot().lastRun, undefined);
@@ -190,7 +192,7 @@ test('clear persists across restart and discards compressed context and stale in
 test('save failure produces a failed run and never reports completion', async t => {
   const f = setup(t);
   let fail = false;
-  const runtime = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
+  const runtime = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
     save: c => { if (fail) throw new Error('disk full'); f.sessions.saveSession(c, true); } });
   t.after(() => runtime.shutdown());
   fail = true;
@@ -200,7 +202,7 @@ test('save failure produces a failed run and never reports completion', async t 
 
 test('subscriber errors do not abort execution', async t => {
   const f = setup(t);
-  const runtime = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const runtime = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   t.after(() => runtime.shutdown());
   runtime.subscribe(() => { throw new Error('view failed'); });
   await collect(runtime.run({ text: 'Run' }));
@@ -209,14 +211,14 @@ test('subscriber errors do not abort execution', async t => {
 
 test('final snapshot failure is recorded as failed in the recovery journal', async t => {
   const f = setup(t);
-  const runtime = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
+  const runtime = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
     save: c => {
       if (c.lastRun?.status === 'completed') throw new Error('snapshot unavailable');
       f.sessions.saveSession(c, true);
     } });
   await collect(runtime.run({ text: 'Finish' }));
   await runtime.shutdown();
-  const recovered = new HarnessRuntime({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
+  const recovered = new AgentSession({ context: f.context, engine: new FakeEngine(), agents: f.agents(),
     save: c => f.sessions.saveSession(c, true) });
   t.after(() => recovered.shutdown());
   assert.equal(recovered.snapshot().lastRun!.status, 'failed');
@@ -229,7 +231,7 @@ test('shutdown cancels an active producer and closes resources without draining 
     await abortable(options.signal!);
     yield {};
   });
-  const runtime = new HarnessRuntime({ context: f.context, engine, agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  const runtime = new AgentSession({ context: f.context, engine, agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   const iterator = runtime.run({ text: 'Wait' });
   await iterator.next();
   await runtime.shutdown();
@@ -243,7 +245,7 @@ test('real CodingAgent updates Todo without UI and forwards tool/model events', 
   const f = setup(t);
   class Model extends BaseChatModel {
     count = 0;
-    _llmType() { return 'harness-test'; }
+    _llmType() { return 'agent-session-test'; }
     bindTools() { return this; }
     async _generate(_messages: BaseMessage[]) {
       const message = this.count++ === 0
@@ -253,7 +255,7 @@ test('real CodingAgent updates Todo without UI and forwards tool/model events', 
       return { generations: [{ text: '', message }] };
     }
   }
-  const runtime = new HarnessRuntime({ context: f.context, engine: new CodingAgent([], { model: new Model({}) }),
+  const runtime = new AgentSession({ context: f.context, engine: new CodingAgent([], { model: new Model({}) }),
     agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
   t.after(() => runtime.shutdown());
   const events = await collect(runtime.run({ text: 'Plan task' }));
@@ -262,5 +264,32 @@ test('real CodingAgent updates Todo without UI and forwards tool/model events', 
   assert.equal(events.filter(e => e.type === 'tool_requested').length, 1);
   assert.equal(events.filter(e => e.type === 'tool_result').length, 1);
   assert.equal(runtime.snapshot().messages.filter(m => m._getType() === 'ai').length, 2);
+  assert.equal(runtime.snapshot().lastRun!.status, 'completed');
+});
+
+test('real graph forwards text deltas before completion and stores the final reply once', async t => {
+  const f = setup(t);
+  class StreamingModel extends BaseChatModel {
+    _llmType() { return 'stream-test'; }
+    bindTools() { return this; }
+    async _generate() { throw new Error('Expected streaming model path'); }
+    async *_streamResponseChunks(_messages: BaseMessage[], _options: unknown, runManager?: CallbackManagerForLLMRun) {
+      for (const text of ['Hello ', '中文']) {
+        const chunk = new ChatGenerationChunk({ text, message: new AIMessageChunk({ id: 'stream-reply', content: text }) });
+        yield chunk;
+        await runManager?.handleLLMNewToken(text, undefined, undefined, undefined, undefined, { chunk });
+      }
+    }
+  }
+  const runtime = new AgentSession({ context: f.context, engine: new CodingAgent([], { model: new StreamingModel({}) }),
+    agents: f.agents(), save: c => f.sessions.saveSession(c, true) });
+  t.after(() => runtime.shutdown());
+  const events = await collect(runtime.run({ text: 'Say hello' }));
+  const deltas = events.filter(e => e.type === 'text_delta');
+  assert.equal(deltas.map(e => e.type === 'text_delta' ? e.text : '').join(''), 'Hello 中文');
+  assert.ok(deltas.length >= 2);
+  assert.ok(events.findIndex(e => e.type === 'text_delta') < events.findIndex(e => e.type === 'message'));
+  const replies = runtime.snapshot().messages.filter(m => m._getType() === 'ai');
+  assert.equal(replies.length, 1); assert.equal(replies[0].content, 'Hello 中文');
   assert.equal(runtime.snapshot().lastRun!.status, 'completed');
 });

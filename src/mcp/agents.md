@@ -2,7 +2,7 @@
 
 ## 概述
 
-`mcp` 模块实现了 Model Context Protocol (MCP) 客户端，允许 DeerCode 连接外部 MCP 服务器，动态加载和调用外部工具。支持 stdio 和 HTTP 两种传输方式。
+`mcp` 模块实现了 Model Context Protocol (MCP) 客户端，允许 dl-code 连接外部 MCP 服务器，动态加载和调用外部工具。支持 stdio 和 HTTP 两种传输方式。
 
 ## 文件结构
 

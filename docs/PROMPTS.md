@@ -1,6 +1,6 @@
 # Prompt 运行机制与回归评测
 
-DeerCode 的主 Agent 和只读子 Agent 共用 prompt 构建器。基础规则规定工作流程，实际工具注册表提供工具名称、说明和参数，项目规则按目录加载，激活的 Skills 在每次模型请求前注入。
+dl-code 的主 Agent 和只读子 Agent 共用 prompt 构建器。基础规则规定工作流程，实际工具注册表提供工具名称、说明和参数，项目规则按目录加载，激活的 Skills 在每次模型请求前注入。
 
 ## 基础行为
 
@@ -14,7 +14,7 @@ DeerCode 的主 Agent 和只读子 Agent 共用 prompt 构建器。基础规则�
 
 默认按以下来源加载：
 
-1. 用户全局目录：`~/.deer-code/`。
+1. 用户全局目录：`~/.dl-code/`。
 2. 当前项目根目录。
 3. 初始工作目录的祖先目录，以及后续访问的目标文件/目录的祖先目录。
 
@@ -25,7 +25,7 @@ DeerCode 的主 Agent 和只读子 Agent 共用 prompt 构建器。基础规则�
 例如：
 
 ```text
-~/.deer-code/AGENTS.md       # 个人通用惯例
+~/.dl-code/AGENTS.md       # 个人通用惯例
 repo/AGENTS.md              # 构建命令、通用约定
 repo/src/ui/AGENTS.md       # 仅 UI 子树的规范
 repo/src/tools/AGENTS.md    # 仅工具子树的规范
@@ -61,7 +61,7 @@ npm run typecheck:prompts
 先配置现有 `config.yaml` 中的 `models.chat_model`，沿用项目的模型初始化入口。评测不会读取或使用当前仓库文件作为任务数据，而是在临时目录创建小型 JSON 编辑任务，只开放目标文件读取/精确替换、项目规则加载和固定断言检查，不开放 shell、MCP 或执行生成代码。
 
 ```sh
-npm run eval:prompts:live -- --live --repeat 3 --label candidate --output .deer-code/evals/candidate.json
+npm run eval:prompts:live -- --live --repeat 3 --label candidate --output .dl-code/evals/candidate.json
 ```
 
 `--live` 显式启用模型调用。默认每个场景一次，每场景最多 40 个图步骤、120 秒；重复次数允许 1–10。每完成一个场景即写报告，失败也会记录并继续其他场景，最终有失败时退出码为 1。临时任务目录在场景结束后清理。
@@ -84,7 +84,9 @@ Windows PowerShell 若通过 `npm.ps1` 丢失了 `--` 后的参数，可将命�
 比较 prompt 文案时，把基线基础提示词保存在文件中：
 
 ```sh
-npm run eval:prompts:live -- --live --repeat 3 --label baseline --prompt-file baseline.txt --output .deer-code/evals/baseline.json
+npm run eval:prompts:live -- --live --repeat 3 --label baseline --prompt-file baseline.txt --output .dl-code/evals/baseline.json
 ```
 
 `--prompt-file` 替换基础 prompt，实际工具说明、项目规则中间件和场景保持相同。固定模型版本、模型参数和重复次数比较成功率、工具错误及成本；报告中的 prompt hash 用于追踪模板。比较整个运行机制的变化需要在相应代码版本分别运行，而不仅替换文案。
+
+Data-directory compatibility: `.dl-code` is preferred; if absent, an existing `.deer-code` directory is reused in place. See [rename compatibility](../README.md).

@@ -1,6 +1,6 @@
+import { resolveDataDirectory } from '../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { parse } from 'yaml';
 import type { LoadedSkill, SkillMetadata } from './types.js';
@@ -44,7 +44,7 @@ export class SkillManager {
 
   constructor(
     readonly projectRoot: string,
-    readonly userRoot = path.join(os.homedir(), '.deer-code', 'skills'),
+    readonly userRoot = path.join(resolveDataDirectory(), 'skills'),
   ) {}
 
   discover(): SkillMetadata[] {
@@ -52,7 +52,7 @@ export class SkillManager {
     this.warnings.length = 0;
     const roots = [
       { root: this.userRoot, source: 'user' as const },
-      { root: path.join(this.projectRoot, '.deer-code', 'skills'), source: 'project' as const },
+      { root: path.join(resolveDataDirectory(this.projectRoot), 'skills'), source: 'project' as const },
     ];
     for (const { root, source } of roots) {
       if (!fs.existsSync(root)) continue;

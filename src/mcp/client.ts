@@ -234,7 +234,7 @@ export class MCPClient {
         sampling: {},
       },
       clientInfo: {
-        name: 'deer-code',
+        name: 'dl-code',
         version: '0.1.0',
       },
     });

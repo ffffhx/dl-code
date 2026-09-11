@@ -1,6 +1,6 @@
+import { resolveDataDirectory } from '../paths.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { randomUUID } from 'node:crypto';
 import { BaseMessage } from '@langchain/core/messages';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@langchain/core/messages';
 import { SessionContext, SessionMetadata } from './types.js';
 
-const STORAGE_DIR = path.join(os.homedir(), '.deer-code');
+const STORAGE_DIR = resolveDataDirectory();
 
 export function serializeMessages(messages: BaseMessage[]): any[] {
   return messages.map((msg) => ({

@@ -21,7 +21,7 @@ if (selected && !PROMPT_CASES.includes(selected as PromptCase)) throw new Error(
 const cases = selected ? [selected as PromptCase] : [...PROMPT_CASES];
 const promptFile = values.get('--prompt-file');
 const basePrompt = promptFile ? fs.readFileSync(path.resolve(promptFile), 'utf8') : undefined;
-const output = path.resolve(values.get('--output') ?? path.join('.deer-code', 'evals', `prompts-${Date.now()}.json`));
+const output = path.resolve(values.get('--output') ?? path.join('.dl-code', 'evals', `prompts-${Date.now()}.json`));
 const model = initChatModel();
 const results: Awaited<ReturnType<typeof runPromptCase>>[] = [];
 const configuredModel = getConfigSection(['models', 'chat_model'])?.model;

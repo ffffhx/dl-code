@@ -15,7 +15,7 @@ import {
 export function setupYargs(argv: string[]) {
   return yargs(hideBin(argv))
     // CLI工具名称
-    .scriptName('deer-code')
+    .scriptName('dl-code')
     .usage('$0 <command> [options]')
     .version('0.1.0')
     // 如果没有输入任何命令，则执行默认命令

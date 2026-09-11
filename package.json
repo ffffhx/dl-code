@@ -1,11 +1,11 @@
 {
-  "name": "deer-code",
+  "name": "dl-code",
   "version": "0.1.0",
   "description": "A minimalist yet sufficient project for enabling everyone to learn how to develop an AI Coding Agent.",
   "main": "dist/main.js",
   "type": "module",
   "bin": {
-    "deer-code": "./dist/main.js"
+    "dl-code": "./bin/dl-code.mjs"
   },
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
@@ -14,13 +14,14 @@
     "eval:prompts:live": "tsx scripts/prompt-eval.ts",
     "typecheck:prompts": "tsc -p tsconfig.prompts.json",
     "subagents:preview": "tsx scripts/subagents-preview.ts",
-    "dev": "tsx src/main.ts",
-    "dev:silent": "npx tsx src/main.ts",
+    "dev": "bun src/main.ts",
+    "dev:silent": "bun src/main.ts",
     "build": "tsc",
-    "start": "node dist/main.js",
+    "start": "bun dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:ui": "bun tests/opentui.integration.ts"
   },
   "keywords": [
     "ai",
@@ -37,22 +38,19 @@
     "@langchain/core": "^1.1.29",
     "@langchain/langgraph": "^1.1.5",
     "@langchain/openai": "^1.2.10",
-    "@types/marked-terminal": "^6.1.1",
     "chalk": "^5.4.1",
     "dotenv": "^16.4.7",
-    "ink": "^5.1.0",
-    "ink-text-input": "^6.0.0",
     "js-tiktoken": "^1.0.21",
     "langchain": "^1.2.28",
-    "marked": "^17.0.3",
-    "marked-terminal": "^7.3.0",
     "minimatch": "^10.0.1",
     "node-pty": "^1.1.0",
     "react": "^18.3.1",
     "yaml": "^2.7.0",
     "yargs": "^18.0.0",
     "zod": "^3.24.1",
-    "zustand": "^5.0.3"
+    "zustand": "^5.0.3",
+    "@opentui/core": "0.5.11",
+    "bun": "1.4.2"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.3.1",

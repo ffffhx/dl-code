@@ -1,5 +1,5 @@
+import { resolveDataDirectory } from '../paths.js';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { ToolMessage, type AIMessage, type BaseMessage } from '@langchain/core/messages';
@@ -31,7 +31,7 @@ export class ProjectInstructionLoader {
 
   constructor(projectRoot: string, options: ProjectInstructionOptions = {}) {
     this.root = fs.realpathSync(projectRoot);
-    this.userRoot = options.userRoot === null ? null : path.resolve(options.userRoot ?? path.join(os.homedir(), '.deer-code'));
+    this.userRoot = options.userRoot === null ? null : path.resolve(options.userRoot ?? resolveDataDirectory());
     this.maxBytes = options.maxBytes ?? 32768;
     if (!Number.isSafeInteger(this.maxBytes) || this.maxBytes < 1) throw new Error('Project instruction maxBytes must be a positive integer');
     this.directories.add(this.root);

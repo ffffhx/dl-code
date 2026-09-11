@@ -80,7 +80,7 @@ SessionContext.contextCheckpoint 保存：
 主 Agent 为每个会话创建 ContextArtifacts：
 
 ~~~text
-~/.deer-code/context/<session-id 的 SHA-256>/
+~/.dl-code/context/<session-id 的 SHA-256>/
   output-<内容 SHA-256>.txt
   history-<内容 SHA-256>.txt
 ~~~
@@ -113,3 +113,5 @@ npm run build
 ~~~
 
 测试覆盖会话恢复后摘要复用、只处理新增前缀、历史变化失效、完整工具交换保留、原文无损回读、写盘失败、模型回退、取消、工具 schema 预算及多次模型请求。使用离线模型，不产生真实 API 费用；摘要的实际语义质量仍取决于所选模型。
+
+Data-directory compatibility: `.dl-code` is preferred; if absent, an existing `.deer-code` directory is reused in place. See [rename compatibility](../README.md).

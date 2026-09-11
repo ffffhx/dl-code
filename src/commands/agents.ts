@@ -1,10 +1,10 @@
+import { resolveDataDirectory } from '../paths.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { AgentJournal } from '../agents/subagents/AgentJournal.js';
 
 export function agentsCommand(rootId?: string): void {
-  const base = path.join(os.homedir(), '.deer-code', 'agents');
+  const base = path.join(resolveDataDirectory(), 'agents');
   if (!fs.existsSync(base)) { console.log('[]'); return; }
   if (!rootId) { console.log(JSON.stringify(fs.readdirSync(base).filter(id => fs.statSync(path.join(base, id)).isDirectory()), null, 2)); return; }
   if (!/^[a-zA-Z0-9_-]+$/.test(rootId)) throw new Error('Invalid root session ID');

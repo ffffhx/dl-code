@@ -22,7 +22,7 @@ export type PromptCase = typeof PROMPT_CASES[number];
 /** Constrained real-file fixtures: no generated programs or arbitrary shell commands execute. */
 export async function runPromptCase(model: BaseChatModel, scenario: PromptCase, options: { basePrompt?: string; timeoutMs?: number } = {}) {
   const temp = fs.realpathSync(os.tmpdir());
-  const root = fs.mkdtempSync(path.join(temp, 'deer-prompt-eval-'));
+  const root = fs.mkdtempSync(path.join(temp, 'dl-prompt-eval-'));
   const file = path.join(root, 'src', 'options.json');
   const context: SessionContext = { sessionId: 'prompt-eval', messages: [], userName: null, todos: [], createdAt: 1, updatedAt: 1 };
   const budget = new ContextManager();
@@ -166,7 +166,7 @@ export async function runPromptCase(model: BaseChatModel, scenario: PromptCase, 
     };
   } finally {
     budget.cleanup();
-    if (path.dirname(root) !== temp || !path.basename(root).startsWith('deer-prompt-eval-')) throw new Error('Unexpected evaluation cleanup path');
+    if (path.dirname(root) !== temp || !path.basename(root).startsWith('dl-prompt-eval-')) throw new Error('Unexpected evaluation cleanup path');
     fs.rmSync(root, { recursive: true, force: true });
   }
 }

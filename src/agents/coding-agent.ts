@@ -23,8 +23,10 @@ import { createReadOnlyTools } from '../tools/read-only.js';
 import type { BaseMessage } from '@langchain/core/messages';
 import { ContextArtifacts } from '../context/ContextArtifacts.js';
 import { createTodoWriteTool } from '../tools/todo/tool.js';
+import { messageText } from '../message-text.js';
 
 export interface AgentExecution {
+  onTextDelta?: (messageId: string, text: string) => void;
   signal?: AbortSignal;
   takeMessages?: () => BaseMessage[];
   tools?: any[];
@@ -147,11 +149,20 @@ export class CodingAgent {
 
     const stream = await agent.stream(
       { messages: context.messages },
-      { recursionLimit: 100, signal: execution.signal, streamMode: 'updates' }
+      { recursionLimit: 100, signal: execution.signal, streamMode: ['updates', 'messages'] }
     );
 
-    for await (const chunk of stream) {
+    for await (const [mode, chunk] of stream) {
       execution.signal?.throwIfAborted();
+      if (mode === 'messages') {
+        const [message, metadata] = chunk;
+        // Internal summarization runs in middleware; only expose the agent model's text.
+        if (message._getType() === 'ai' && metadata.langgraph_node === 'model_request') {
+          const text = messageText(message.content);
+          if (text && message.id) execution.onTextDelta?.(message.id, text);
+        }
+        continue;
+      }
       for (const node of Object.values(chunk)) {
         if (node && typeof node === 'object' && 'messages' in node && Array.isArray(node.messages)) {
           for (const message of node.messages as BaseMessage[]) {

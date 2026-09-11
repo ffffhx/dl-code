@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AgentManager } from '../src/agents/subagents/AgentManager.js';
+import { SubagentManager } from '../src/agents/subagents/SubagentManager.js';
 import { AgentJournal } from '../src/agents/subagents/AgentJournal.js';
 import { createSubagentTools } from '../src/agents/subagents/tools.js';
 import type { AgentRecord, RunnerFactory } from '../src/agents/subagents/types.js';
@@ -16,9 +16,9 @@ import { createReadOnlyTools } from '../src/tools/read-only.js';
 import { getGlobalMCPManager } from '../src/mcp/index.js';
 
 function fixture(t: TestContext) {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'deer-agents-test-'));
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-agents-test-'));
   t.after(() => {
-    assert.ok(path.basename(folder).startsWith('deer-agents-test-'));
+    assert.ok(path.basename(folder).startsWith('dl-agents-test-'));
     assert.equal(path.dirname(folder), fs.realpathSync(os.tmpdir()));
     fs.rmSync(folder, { recursive: true, force: true });
   });
@@ -44,7 +44,7 @@ test('two children run independently, return immediately, enforce capacity and c
       return record.task;
     }, cleanup: () => { cleaned.push(record.id); },
   });
-  const manager = new AgentManager('root', f.journal, factory);
+  const manager = new SubagentManager('root', f.journal, factory);
   manager.attachRoot(f.root);
   const quick = manager.spawn('quick', 'explicit background');
   const slow = manager.spawn('slow');
@@ -66,7 +66,7 @@ test('mail is delivered exactly once and explicit follow-up reuses the child his
   const f = fixture(t);
   const delivered: string[] = [];
   let calls = 0;
-  const manager = new AgentManager('root', f.journal, () => ({
+  const manager = new SubagentManager('root', f.journal, () => ({
     run: async (context, control) => {
       calls++;
       delivered.push(...control.takeMessages().map(m => String(m.content)));
@@ -99,7 +99,7 @@ test('journal recovers interrupted children and pending mail, repairs dangling t
   f.journal.save(record, 'started');
   fs.appendFileSync(path.join(f.folder, 'child', 'events.jsonl'), '{unfinished');
   let ran = false;
-  const manager = new AgentManager('root', new AgentJournal(f.folder), () => ({
+  const manager = new SubagentManager('root', new AgentJournal(f.folder), () => ({
     run: async (context, control) => {
       ran = true;
       assert.ok(context.messages.some(m => m instanceof ToolMessage && m.tool_call_id === 'tool-1'));
@@ -118,7 +118,7 @@ test('journal recovers interrupted children and pending mail, repairs dangling t
 
 test('failure settles waiters and releases capacity; shutdown aborts all active children', async t => {
   const f = fixture(t);
-  const manager = new AgentManager('root', f.journal, record => ({
+  const manager = new SubagentManager('root', f.journal, record => ({
     run: async (_context, control) => {
       if (record.task === 'fail') throw new Error('model failure');
       await abortableDelay(control.signal); return 'unexpected';
@@ -137,7 +137,7 @@ test('failure settles waiters and releases capacity; shutdown aborts all active 
 
 test('cancelling a wait does not cancel the child', async t => {
   const f = fixture(t);
-  const manager = new AgentManager('root', f.journal, () => ({ run: async (_c, control) => { await abortableDelay(control.signal); return ''; }, cleanup: () => {} }));
+  const manager = new SubagentManager('root', f.journal, () => ({ run: async (_c, control) => { await abortableDelay(control.signal); return ''; }, cleanup: () => {} }));
   manager.attachRoot(f.root);
   const child = manager.spawn('wait');
   const controller = new AbortController();
@@ -171,7 +171,7 @@ test('real CodingAgent child reads a file, receives mail at next model boundary,
     new AIMessage('Final review'),
   ]);
   const childAgent = new CodingAgent([], { readOnly: true, model });
-  const manager = new AgentManager('root', f.journal, () => ({
+  const manager = new SubagentManager('root', f.journal, () => ({
     run: async (context, control) => {
       for await (const _ of childAgent.execute(context, control.onContextChange, control)) { /* stream */ }
       return String(context.messages.at(-1)?.content);
@@ -194,7 +194,7 @@ test('real CodingAgent child reads a file, receives mail at next model boundary,
 
 test('subagent tools expose asynchronous task lifecycle and errors as tool results', async t => {
   const f = fixture(t);
-  const manager = new AgentManager('root', f.journal, () => ({ run: async () => 'summary', cleanup: () => {} }));
+  const manager = new SubagentManager('root', f.journal, () => ({ run: async () => 'summary', cleanup: () => {} }));
   manager.attachRoot(f.root);
   const tools = createSubagentTools(manager);
   const created = JSON.parse(await tools[0].invoke({ task: 'summarize' }));
@@ -234,9 +234,9 @@ test('independent real shells keep cwd and environment separate; cancelling one 
   const a = new BashTerminal(aDir); const b = new BashTerminal(bDir);
   try {
     const windows = process.platform === 'win32';
-    assert.match(await a.execute(windows ? "$env:DEER_TEST_VALUE='only-a'; (Get-Location).Path" : 'export DEER_TEST_VALUE=only-a; pwd', 5000), /[\\/]a/);
+    assert.match(await a.execute(windows ? "$env:DL_TEST_VALUE='only-a'; (Get-Location).Path" : 'export DL_TEST_VALUE=only-a; pwd', 5000), /[\\/]a/);
     assert.match(await b.getcwd(), /[\\/]b/);
-    assert.ok(!(await b.execute(windows ? '$env:DEER_TEST_VALUE' : 'printf "%s" "$DEER_TEST_VALUE"')).includes('only-a'));
+    assert.ok(!(await b.execute(windows ? '$env:DL_TEST_VALUE' : 'printf "%s" "$DL_TEST_VALUE"')).includes('only-a'));
     const controller = new AbortController();
     const waiting = a.execute(windows ? 'Start-Sleep -Seconds 60' : 'sleep 60', 10000, controller.signal);
     setTimeout(() => controller.abort(), 100);
@@ -249,7 +249,7 @@ test('independent real shells keep cwd and environment separate; cancelling one 
 test('a real main Agent delegates two parallel children and collects their results', async t => {
   const f = fixture(t);
   const childModels: ScriptedModel[] = [];
-  const manager = new AgentManager('root', f.journal, record => {
+  const manager = new SubagentManager('root', f.journal, record => {
     const model = new ScriptedModel([new AIMessage(`Evidence for ${record.task}`)]);
     childModels.push(model);
     const agent = new CodingAgent([], { readOnly: true, model });
@@ -308,7 +308,7 @@ test('cancellation reaches an actual child model request and prevents additional
       return { generations: [{ text: '', message: new AIMessage('must not happen') }] };
     }
   }
-  const manager = new AgentManager('root', f.journal, () => {
+  const manager = new SubagentManager('root', f.journal, () => {
     const agent = new CodingAgent([], { readOnly: true, model: new WaitingModel({}) });
     return { run: async (context, control) => {
       for await (const chunk of agent.execute(context, control.onContextChange, control)) void chunk;
@@ -327,9 +327,9 @@ test('cancellation reaches an actual child model request and prevents additional
 test('two live managers cannot own the same journal, and orderly shutdown releases ownership', async t => {
   const f = fixture(t);
   const factory: RunnerFactory = () => ({ run: async () => '', cleanup: () => {} });
-  const first = new AgentManager('root', f.journal, factory);
-  assert.throws(() => new AgentManager('root', new AgentJournal(f.folder), factory), /already managed/);
+  const first = new SubagentManager('root', f.journal, factory);
+  assert.throws(() => new SubagentManager('root', new AgentJournal(f.folder), factory), /already managed/);
   await first.shutdown();
-  const second = new AgentManager('root', new AgentJournal(f.folder), factory);
+  const second = new SubagentManager('root', new AgentJournal(f.folder), factory);
   await second.shutdown();
 });

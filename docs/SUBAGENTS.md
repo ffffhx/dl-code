@@ -1,10 +1,10 @@
 # Subagents
 
-Deer-code runs the main agent and up to two read-only children in one Node.js process. Each child has independent messages, active skills, inbox, cancellation signal and status. Children receive only the explicit task/background, not the parent's full conversation. Children cannot spawn further children.
+dl-code runs the main agent and up to two read-only children in one Node.js process. Each child has independent messages, active skills, inbox, cancellation signal and status. Children receive only the explicit task/background, not the parent's full conversation. Children cannot spawn further children.
 
 ## Use
 
-Start Deer-code with your existing model configuration and ask:
+Start dl-code with your existing model configuration and ask:
 
 “派两个子 Agent，分别检查项目入口和测试覆盖。你自己查看依赖，最后汇总两份结论。”
 
@@ -25,7 +25,7 @@ MCP connections belong to the application. CodingAgent cleanup closes only its o
 ## Persistence and recovery
 
 ```text
-~/.deer-code/agents/<root-session-id>/<agent-id>/
+~/.dl-code/agents/<root-session-id>/<agent-id>/
   metadata.json
   events.jsonl
 ```
@@ -49,4 +49,6 @@ pnpm test
 pnpm subagents:preview
 ```
 
-http://127.0.0.1:4323/ serves this guide. `/agents` shows an offline demonstration using the real AgentManager with deterministic runners: two tasks, one message delivery, one completion and one cancellation. `/events` shows their actual JSONL records. This demonstration makes no model API requests and does not modify user sessions. Tests additionally exercise real LangChain/CodingAgent tool loops with a scripted model and real isolated Shell processes.
+http://127.0.0.1:4323/ serves this guide. `/agents` shows an offline demonstration using the real SubagentManager with deterministic runners: two tasks, one message delivery, one completion and one cancellation. `/events` shows their actual JSONL records. This demonstration makes no model API requests and does not modify user sessions. Tests additionally exercise real LangChain/CodingAgent tool loops with a scripted model and real isolated Shell processes.
+
+Data-directory compatibility: `.dl-code` is preferred; if absent, an existing `.deer-code` directory is reused in place. See [rename compatibility](../README.md).
