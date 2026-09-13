@@ -25,3 +25,7 @@
 - 独立工具集合不等于文件系统或 OS 沙箱。
 
 验证：`npm test`。整体架构见 [Agent Runtime](../../docs/AGENT_RUNTIME.md)。
+
+## 新增能力
+
+`CodingAgent` 每次执行创建 ToolCatalog 和统一执行策略，每次模型请求召回作用域内的 Memory。MemoryRuntime 主 Agent 可读写、子 Agent 只读。工具定义先按激活状态过滤再计算上下文预算。子任务支持验收标准、显式 review 和已验收依赖；详情见 docs/ARCHITECTURE.md。

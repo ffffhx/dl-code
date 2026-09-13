@@ -12,6 +12,9 @@ export interface AgentRecord {
   inbox: AgentMail[];
   result?: string;
   error?: string;
+  dependsOn?: string[];
+  acceptanceCriteria?: string;
+  review?: { status: 'accepted' | 'rejected'; evidence: string; at: number };
 }
 export interface RunControl {
   signal: AbortSignal;

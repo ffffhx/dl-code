@@ -18,7 +18,9 @@ The CLI launcher uses project-local Bun. Configuration comes from `config.yaml` 
 
 `AgentSession` accepts input, saves conversation state, starts `CodingAgent`, forwards events, and handles cancellation and recovery. `CodingAgent` assembles tools and request middleware; LangChain / LangGraph runs the **Agent Loop** (model → tools → model). `SubagentManager` manages read-only children and their mailboxes, and currently also keeps the root record for shared journal recovery. `SessionManager` reads and writes session snapshots; it does not run agents.
 
-See [execution and recovery](docs/AGENT_RUNTIME.md), [context management](docs/TOKEN_MANAGEMENT.md), [Skills](docs/SKILLS.md), and [subagents](docs/SUBAGENTS.md).
+See the [four architecture decisions: compaction, memory, collaboration and capabilities](docs/ARCHITECTURE.md), [execution and recovery](docs/AGENT_RUNTIME.md), [context management](docs/TOKEN_MANAGEMENT.md), [Skills](docs/SKILLS.md), and [subagents](docs/SUBAGENTS.md).
+
+Long-term memory uses inspectable Markdown entries in `<data-directory>/memory`, with user/project namespaces, lexical recall, source-file freshness checks, optimistic revisions and invalidation. Main agents can search/read/save/invalidate entries; read-only children can only search/read. MCP tools are discovered through `search_tools`, activated with `load_tools` and removed with `unload_tools`. Model and tool budgets are configurable under `runtime` in [config.example.yaml](config.example.yaml).
 
 ## Rename compatibility
 

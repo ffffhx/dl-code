@@ -32,7 +32,8 @@ export class TextEditor {
 
       const fileLines = fileContent.split('\n');
       const nLinesFile = fileLines.length;
-      let [startLine, endLine] = viewRange;
+      const startLine = viewRange[0];
+      let endLine = viewRange[1];
 
       if (startLine < 1 || startLine > nLinesFile) {
         throw new Error(

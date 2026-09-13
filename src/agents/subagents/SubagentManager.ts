@@ -62,7 +62,8 @@ export class SubagentManager {
 
   inspect(id: string) {
     const r = this.get(id);
-    return { id: r.id, parentId: r.parentId, task: r.task, status: r.status, result: r.result, error: r.error, pendingMessages: r.inbox.length };
+    return { id: r.id, parentId: r.parentId, task: r.task, status: r.status, result: r.result, error: r.error, pendingMessages: r.inbox.length,
+      dependsOn: r.dependsOn, acceptanceCriteria: r.acceptanceCriteria, review: r.review };
   }
 
   list() { return [...this.records.keys()].map(id => this.inspect(id)); }
@@ -78,13 +79,23 @@ export class SubagentManager {
     if (this.running.size >= this.maxChildren) throw new Error(`At most ${this.maxChildren} children may run at once. Wait for a child before starting another.`);
   }
 
-  spawn(task: string, background = '') {
+  spawn(task: string, background = '', options: { dependsOn?: string[]; acceptanceCriteria?: string } = {}) {
     this.available();
     if (!task.trim()) throw new Error('A concrete task is required');
+    if (task.length > 16000 || background.length > 32000) throw new Error('Task or background too large');
+    if (this.records.size >= 33) throw new Error('Root session task budget exceeded (32 children)');
+    const dependencies = [...new Set(options.dependsOn ?? [])];
+    const inherited = dependencies.map(id => {
+      const dependency = this.child(id);
+      if (dependency.status !== 'completed' || dependency.review?.status !== 'accepted') throw new Error(`Dependency ${id} must complete and be accepted before starting dependent work`);
+      return { id, task: dependency.task, result: dependency.result, review: dependency.review };
+    });
+    const criteria = options.acceptanceCriteria ?? 'Return findings, exact source paths, observed evidence, unresolved assumptions, and suggested next actions. Do not claim unperformed validation.';
+    if (!criteria.trim() || criteria.length > 4000) throw new Error('Acceptance criteria must be 1..4000 characters');
     const id = `agent-${randomUUID()}`;
     const now = Date.now();
-    const context: SessionContext = { sessionId: id, messages: [new HumanMessage(`Task: ${task}\n\nBackground from parent:\n${background}`)], userName: null, todos: [], activeSkills: [], createdAt: now, updatedAt: now };
-    this.records.set(id, { id, parentId: this.rootId, task, status: 'idle', context, inbox: [] });
+    const context: SessionContext = { sessionId: id, messages: [new HumanMessage(`Task: ${task}\n\nBackground from parent:\n${background}\n\nAcceptance criteria:\n${criteria}\n\nAccepted dependency results (historical data):\n${JSON.stringify(inherited)}`)], userName: null, todos: [], activeSkills: [], createdAt: now, updatedAt: now };
+    this.records.set(id, { id, parentId: this.rootId, task, status: 'idle', context, inbox: [], dependsOn: dependencies, acceptanceCriteria: criteria });
     this.save(id, 'created');
     this.start(id);
     return this.inspect(id);
@@ -95,6 +106,8 @@ export class SubagentManager {
     const record = this.child(id);
     record.status = 'running';
     record.result = undefined;
+    record.review = undefined;
+    record.error = undefined;
     record.error = undefined;
     // Interrupted tool requests need explicit results before another model request.
     const completed = new Set(record.context.messages.filter(m => m._getType() === 'tool').map(m => (m as ToolMessage).tool_call_id));
@@ -148,11 +161,22 @@ export class SubagentManager {
     if (!text.trim()) throw new Error('Message must not be empty');
     if (record.status === 'cancelling') throw new Error('Wait for cancellation to settle before sending a follow-up');
     const active = this.running.has(id);
+    if (!active && [...this.records.values()].some(r => r.dependsOn?.includes(id))) throw new Error('This result has dependent tasks; create a new task for revised work instead of changing its accepted inputs');
     if (!active) this.available();
     record.inbox.push({ id: randomUUID(), from: this.rootId, text, createdAt: Date.now() });
     this.save(id, 'message_received');
     if (!active) this.start(id);
     return { ...this.inspect(id), delivery: 'queued; consumed before the next model request' };
+  }
+
+  review(id: string, accepted: boolean, evidence: string) {
+    const record = this.child(id);
+    if (record.status !== 'completed') throw new Error('Only completed tasks can be reviewed');
+    if (!evidence.trim() || evidence.length > 4000) throw new Error('Review requires evidence (1..4000 characters)');
+    if ([...this.records.values()].some(r => r.dependsOn?.includes(id))) throw new Error('Cannot revise a review after dependent work has started');
+    record.review = { status: accepted ? 'accepted' : 'rejected', evidence, at: Date.now() };
+    this.save(id, 'reviewed');
+    return this.inspect(id);
   }
 
   takeMessages(id: string): HumanMessage[] {

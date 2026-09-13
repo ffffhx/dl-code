@@ -35,6 +35,11 @@ context:
   summary_tokens: 2000 # Maximum stored task handoff size.
   tool_output_tokens: 4000 # Larger text results become previews + artifact references.
 
+runtime:
+  max_model_calls: 50 # Main agent model requests per run, excluding internal summaries.
+  max_tool_calls: 150 # Shared by all tools in one agent run.
+  tool_timeout_ms: 65000 # Abort the run on deadline; wait for tool cleanup; never replay writes automatically.
+
 tools:
   # MCP (Model Context Protocol) servers configuration
   # You can add multiple MCP servers here to extend the agent's capabilities

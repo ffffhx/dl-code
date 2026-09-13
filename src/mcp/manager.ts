@@ -25,6 +25,7 @@ export class MCPServerManager {
       const message = `[MCP] Connected to server '${name}': ${serverInfo?.serverInfo.name} v${serverInfo?.serverInfo.version}`;
       startupLogger.log(message, 'info');
     } catch (error) {
+      await client.disconnect();
       const errorMessage = `[MCP] Failed to connect to server '${name}': ${error instanceof Error ? error.message : String(error)}`;
       startupLogger.log(errorMessage, 'error');
       console.error(errorMessage);
@@ -70,14 +71,15 @@ export class MCPServerManager {
   async callTool(
     serverName: string,
     toolName: string,
-    args: Record<string, any>
+    args: Record<string, any>,
+    signal?: AbortSignal,
   ): Promise<any> {
     const client = this.servers.get(serverName);
     if (!client) {
       throw new Error(`MCP server '${serverName}' not found`);
     }
 
-    return await client.callTool(toolName, args);
+    return await client.callTool(toolName, args, signal);
   }
 
   async disconnectAll(): Promise<void> {

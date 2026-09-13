@@ -3,6 +3,7 @@ import { TodoItem } from '../tools/todo/types.js';
 import { TokenUsage } from '../context/index.js';
 import type { ActiveSkill } from '../skills/types.js';
 import type { ContextCheckpoint } from '../context/history.js';
+import type { ToolExecutionRecord } from '../tools/ExecutionPolicy.js';
 
 export interface SessionContext {
   lastRun?: SessionRun;
@@ -16,6 +17,7 @@ export interface SessionContext {
   compressionCount?: number;
   contextCheckpoint?: ContextCheckpoint;
   activeSkills?: ActiveSkill[];
+  toolExecutions?: ToolExecutionRecord[];
 }
 
 export interface SessionRun {

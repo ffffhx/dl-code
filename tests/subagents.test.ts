@@ -198,9 +198,9 @@ test('subagent tools expose asynchronous task lifecycle and errors as tool resul
   manager.attachRoot(f.root);
   const tools = createSubagentTools(manager);
   const created = JSON.parse(await tools[0].invoke({ task: 'summarize' }));
-  const result = JSON.parse(await tools[1].invoke({ id: created.id, timeout_ms: 1000 }));
+  const result = JSON.parse(await tools.find(t => t.name === 'wait_agent')!.invoke({ id: created.id, timeout_ms: 1000 }));
   assert.equal(result.result, 'summary');
-  assert.match(await tools[3].invoke({ id: 'unknown' }), /Subagent error/);
+  assert.match(await tools.find(t => t.name === 'cancel_agent')!.invoke({ id: 'unknown' }), /Subagent error/);
   await manager.shutdown();
 });
 

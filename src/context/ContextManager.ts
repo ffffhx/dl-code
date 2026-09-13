@@ -41,6 +41,7 @@ const SUMMARY_INSTRUCTIONS = [
   'Pending: unfinished tasks, blockers, unresolved questions and failed approaches to avoid repeating.',
   'Files: exact paths, symbols, tool arguments and artifact IDs needed to continue.',
   'Validation: commands/tests run and observed outcomes; distinguish evidence from assumptions.',
+  'Keep hypotheses explicitly marked unverified in Pending. Never promote possible causes into confirmed facts or partial checks into overall completion.',
   'Next: concrete next actions.',
   'Merge the previous handoff with the new transcript. Retain still-relevant facts and exact identifiers.',
   'Do not invent missing facts; use empty arrays when unknown.',
@@ -118,6 +119,38 @@ export class ContextManager {
     });
   }
 
+  /** Only prune exact repeated read observations; never infer that different outputs are equivalent. */
+  private pruneDuplicateReads(messages: BaseMessage[], artifacts?: ContextArtifacts): BaseMessage[] {
+    if (!artifacts) return messages;
+    const calls = new Map<string, string>();
+    for (const message of messages) if (message._getType() === 'ai') {
+      for (const call of (message as AIMessage).tool_calls ?? []) {
+        if (call.id && (['read_file', 'grep', 'ls', 'tree'].includes(call.name)
+          || (call.name === 'text_editor' && call.args.command === 'view'))) calls.set(call.id, JSON.stringify([call.name, call.args]));
+      }
+    }
+    const seen = new Map<string, string>();
+    const result = [...messages];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message._getType() !== 'tool' || typeof message.content !== 'string' || message.content.length < 512) continue;
+      const tool = message as ToolMessage;
+      if (tool.status === 'error') continue;
+      const call = calls.get(tool.tool_call_id);
+      if (!call) continue;
+      const key = call + '\n' + message.content;
+      const later = seen.get(key);
+      seen.set(key, tool.tool_call_id);
+      if (!later) continue;
+      const artifact = artifacts.write('output', message.content);
+      const content = `[Exact repeated read omitted; identical later result: ${later}. Original: ${artifact}; read_context_artifact.]`;
+      if (this.countText(content) >= this.countText(message.content)) continue;
+      result[i] = new ToolMessage({ id: tool.id, name: tool.name, tool_call_id: tool.tool_call_id,
+        status: tool.status, additional_kwargs: tool.additional_kwargs, response_metadata: tool.response_metadata, content });
+    }
+    return result;
+  }
+
   /** Safe cut positions keep parallel tool calls and all their results together. */
   private boundaries(history: BaseMessage[]): number[] {
     const boundaries = [0];
@@ -191,7 +224,7 @@ export class ContextManager {
     const raw = messages.filter(message => message._getType() !== 'system');
     const checkpoint = validCheckpoint(options.checkpoint, raw) ? options.checkpoint : undefined;
     const covered = checkpoint?.coveredMessages ?? 0;
-    const history = [...raw.slice(0, covered), ...this.offload(raw.slice(covered), options.artifacts)];
+    const history = [...raw.slice(0, covered), ...this.offload(this.pruneDuplicateReads(raw.slice(covered), options.artifacts), options.artifacts)];
     const toolTokens = options.toolTokens ?? 0;
     if (!Number.isSafeInteger(toolTokens) || toolTokens < 0) throw new Error('Invalid tool token estimate');
     let latestUser = -1;

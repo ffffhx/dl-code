@@ -70,7 +70,7 @@ await initializeMCPServers(config);
 **转换过程：**
 
 1. 解析 MCP 工具的 JSON Schema
-2. 转换为 Zod schema
+2. 保留原始 JSON Schema，使用 Ajv 校验参数
 3. 创建 DynamicStructuredTool 包装器
 
 **工具命名规则：** `mcp_{serverName}_{toolName}`
@@ -140,9 +140,11 @@ const result = await manager.callTool('context7', 'search', { query: 'react hook
 
 ## 设计要点
 
-1. **协议兼容** - 遵循 MCP 协议规范（版本 2024-11-05）
+1. **协议协商** - 初始化请求版本 2025-03-26，后续 HTTP 请求携带服务端协商版本
 2. **双传输支持** - stdio 适合本地进程，HTTP 适合远程服务
-3. **请求超时** - stdio 请求默认 30 秒超时
+3. **请求超时** - stdio 和 HTTP 请求默认 30 秒超时，支持调用者取消
 4. **错误处理** - 连接失败不影响其他服务器
-5. **懒加载** - 工具在首次执行时才加载
+5. **按需暴露** - 工具对象预先登记，模型只看到 ToolCatalog 激活的定义
 6. **自动转换** - MCP 工具自动转换为 LangChain 工具格式
+
+新增架构见 [ARCHITECTURE](../../docs/ARCHITECTURE.md)。HTTP 支持 JSON/SSE 响应、初始化通知和会话头；stdio 使用增量 UTF-8 解码并清理请求计时器。工具目录支持分页。

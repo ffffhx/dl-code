@@ -132,7 +132,7 @@ export class AgentSession {
       run.status = controller.signal.aborted ? 'cancelled' : 'failed';
       run.error = error instanceof Error ? error.message : String(error);
     } finally {
-      if (controller.signal.aborted) await this.deps.agents.cancelAll();
+      if (controller.signal.aborted || run.status === 'failed') await this.deps.agents.cancelAll();
       run.finishedAt = Date.now();
       this.context.lastRun = run;
       try { this.persist(); this.deps.agents.finishRoot(); }
@@ -166,6 +166,10 @@ export class AgentSession {
   }
 
   private repairPendingCalls(): void {
+    for (const record of this.context.toolExecutions ?? []) if (record.status === 'running') {
+      record.status = 'unknown';
+      record.error = 'Execution interrupted; inspect current state before retrying';
+    }
     const results = new Set(this.context.messages.filter(m => m._getType() === 'tool').map(m => (m as ToolMessage).tool_call_id));
     this.context.messages = this.context.messages.flatMap(message => [message,
       ...(message._getType() === 'ai' ? (message as AIMessage).tool_calls ?? [] : [])

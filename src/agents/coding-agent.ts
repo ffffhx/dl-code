@@ -24,30 +24,41 @@ import type { BaseMessage } from '@langchain/core/messages';
 import { ContextArtifacts } from '../context/ContextArtifacts.js';
 import { createTodoWriteTool } from '../tools/todo/tool.js';
 import { messageText } from '../message-text.js';
+import { MemoryStore } from '../memory/MemoryStore.js';
+import { MemoryRuntime } from '../memory/MemoryRuntime.js';
+import { ToolCatalog } from '../tools/ToolCatalog.js';
+import { createExecutionPolicy, type ExecutionLimits } from '../tools/ExecutionPolicy.js';
+import type { DynamicStructuredTool } from '@langchain/core/tools';
 
 export interface AgentExecution {
   onTextDelta?: (messageId: string, text: string) => void;
   signal?: AbortSignal;
   takeMessages?: () => BaseMessage[];
   tools?: any[];
+  limits?: ExecutionLimits;
 }
 
 export class CodingAgent {
   private model: BaseChatModel;
   private tools: any[];
   private contextManager: ContextManager;
-  private mcpToolsLoaded = false;
   private skillManager: SkillManager;
   private terminal?: ReturnType<typeof createBashTool>;
   private readonlyAgent: boolean;
+  private externalTools: DynamicStructuredTool[] = [];
+  private memory: MemoryRuntime;
+  private limits: ExecutionLimits;
 
-  constructor(pluginTools: any[] = [], options: { readOnly?: boolean; model?: BaseChatModel } = {}) {
+  constructor(pluginTools: any[] = [], options: { readOnly?: boolean; model?: BaseChatModel; memoryDirectory?: string } = {}) {
     this.readonlyAgent = options.readOnly ?? false;
+    this.memory = new MemoryRuntime(new MemoryStore(project.rootDir, options.memoryDirectory), this.readonlyAgent);
     this.skillManager = new SkillManager(project.rootDir);
     const discovered = this.skillManager.discover();
     startupLogger.log(`[Skills] Discovered ${discovered.length} skills`, 'info');
     for (const warning of this.skillManager.warnings) startupLogger.log(`[Skills] ${warning}`, 'warning');
     this.model = options.model ?? initChatModel();
+    const limits = options.model ? {} : getConfigSection(['runtime']) ?? {};
+    this.limits = { maxModelCalls: limits.max_model_calls, maxToolCalls: limits.max_tool_calls, toolTimeoutMs: limits.tool_timeout_ms };
     this.terminal = this.readonlyAgent ? undefined : createBashTool(project.rootDir);
     this.tools = this.readonlyAgent ? createReadOnlyTools(project.rootDir) : [
       this.terminal!.tool,
@@ -82,18 +93,15 @@ export class CodingAgent {
   private async loadMCPTools(): Promise<void> {
     // External tool side effects are unknown. Read-only children receive no MCP tools.
     if (this.readonlyAgent) return;
-    if (this.mcpToolsLoaded) {
-      return;
-    }
+    this.externalTools = [];
 
     try {
       const mcpManager = getGlobalMCPManager();
       if (mcpManager.getServerCount() > 0) {
         const mcpTools = await loadMCPTools(mcpManager);
-        this.tools.push(...mcpTools);
+        this.externalTools = mcpTools;
         console.log(`[MCP] Loaded ${mcpTools.length} tools from MCP servers`);
       }
-      this.mcpToolsLoaded = true;
     } catch (error) {
       console.error('[MCP] Failed to load MCP tools:', error);
     }
@@ -121,58 +129,77 @@ export class CodingAgent {
     onContextChange: (context: SessionContext) => void = () => {},
     execution: AgentExecution = {},
   ): AsyncGenerator<any, void, unknown> {
-    await this.loadMCPTools();
-    this.skillManager.discover();
-    const skills = new SkillRuntime(this.skillManager, context, () => onContextChange(context));
-    const projectInstructions = new ProjectInstructionLoader(project.rootDir);
-    projectInstructions.restore(context.messages);
-    const artifacts = new ContextArtifacts(context.sessionId);
-    const artifactReader = artifacts.tool(Math.max(1, Math.min(4000, Math.floor(this.contextManager.toolOutputTokens / 4))));
-    const todoTools = this.readonlyAgent ? [] : [createTodoWriteTool(todos => {
-      context.todos = todos;
-      onContextChange(context);
-    })];
-    const tools = [...this.tools, ...todoTools, ...skills.tools(), projectInstructions.tool(), artifactReader, ...(this.readonlyAgent ? [] : execution.tools ?? [])];
-    const basePrompt = this.getSystemPrompt(context, tools) + (this.readonlyAgent
-      ? '\nYou are a read-only child agent. Complete the assigned analysis, cite file evidence, and return a concise result to the parent. You cannot modify files, execute commands, call MCP tools or spawn agents. Skills do not change these limits.'
-      : tools.some(tool => tool.name === 'spawn_agent') && tools.some(tool => tool.name === 'wait_agent') && tools.some(tool => tool.name === 'list_agents')
-        ? '\nFor independent analysis tasks you may spawn read-only children. Supply a bounded task and necessary background, continue your own work, and collect results with wait_agent. Messages are delivered at model boundaries; inspect list_agents for recovered tasks. Do not report a child task complete unless its result confirms completion.' : '');
-    const middleware = createSkillMiddleware(skills, this.contextManager, context,
-      () => `${basePrompt}\n\n${projectInstructions.prompt()}`, onContextChange, { ...execution, artifacts });
+    const controller = new AbortController();
+    const abort = () => controller.abort(execution.signal?.reason);
+    execution.signal?.addEventListener('abort', abort, { once: true });
+    if (execution.signal?.aborted) abort();
+    const runExecution = { ...execution, signal: controller.signal };
+    const recallQuery = messageText(context.messages.filter(m => m._getType() === 'human').at(-1)?.content ?? '').slice(0, 2000);
+    try {
+      controller.signal.throwIfAborted();
+      await this.loadMCPTools();
+      this.skillManager.discover();
+      const skills = new SkillRuntime(this.skillManager, context, () => onContextChange(context));
+      const projectInstructions = new ProjectInstructionLoader(project.rootDir);
+      projectInstructions.restore(context.messages);
+      const artifacts = new ContextArtifacts(context.sessionId);
+      const artifactReader = artifacts.tool(Math.max(1, Math.min(4000, Math.floor(this.contextManager.toolOutputTokens / 4))));
+      const todoTools = this.readonlyAgent ? [] : [createTodoWriteTool(todos => {
+        context.todos = todos;
+        onContextChange(context);
+      })];
+      const catalog = new ToolCatalog(this.externalTools);
+      const tools = [...this.tools, ...todoTools, ...skills.tools(), ...this.memory.tools(),
+        ...(this.readonlyAgent || !this.externalTools.length ? [] : catalog.tools()),
+        projectInstructions.tool(), artifactReader, ...(this.readonlyAgent ? [] : execution.tools ?? [])];
+      const basePrompt = this.getSystemPrompt(context, tools) + (this.readonlyAgent
+        ? '\nYou are a read-only child agent. Complete the assigned analysis, cite file evidence, and return a concise result to the parent. You cannot modify files, execute commands, call MCP tools or spawn agents. Skills do not change these limits.'
+        : tools.some(tool => tool.name === 'spawn_agent') && tools.some(tool => tool.name === 'wait_agent') && tools.some(tool => tool.name === 'list_agents')
+          ? '\nFor independent analysis tasks you may spawn read-only children. Supply a bounded task, background and acceptance criteria; continue your own work and collect results with wait_agent. Check source evidence and use review_agent to accept or reject results. Dependent tasks require accepted prerequisite IDs in depends_on; accepted inputs are frozen once consumed. Messages arrive at model boundaries; inspect list_agents for recovered tasks. A completed child has finished execution, not necessarily passed acceptance.' : '');
+      const middleware = createSkillMiddleware(skills, this.contextManager, context,
+        () => `${basePrompt}\n\n${projectInstructions.prompt()}\n\n${this.memory.prompt(recallQuery)}`,
+        onContextChange, { ...runExecution, artifacts });
+      const policy = createExecutionPolicy(controller, execution.limits ?? this.limits, record => {
+        const records = context.toolExecutions ??= [];
+        const existing = records.findIndex(item => item.runId === record.runId && item.callId === record.callId);
+        if (existing >= 0) records[existing] = record; else records.push(record);
+        onContextChange(context);
+      });
 
-    const agent = createAgent({
-      model: this.model,
-      tools,
-      systemPrompt: basePrompt,
-      middleware: [middleware, createProjectInstructionMiddleware(projectInstructions)],
-    });
+      const agent = createAgent({
+        model: this.model,
+        tools,
+        systemPrompt: basePrompt,
+        middleware: [policy, catalog.middleware(), middleware, createProjectInstructionMiddleware(projectInstructions)],
+      });
 
-    const stream = await agent.stream(
-      { messages: context.messages },
-      { recursionLimit: 100, signal: execution.signal, streamMode: ['updates', 'messages'] }
-    );
+      const stream = await agent.stream(
+        { messages: context.messages },
+        { recursionLimit: 100, signal: controller.signal, streamMode: ['updates', 'messages'] }
+      );
 
-    for await (const [mode, chunk] of stream) {
-      execution.signal?.throwIfAborted();
-      if (mode === 'messages') {
-        const [message, metadata] = chunk;
-        // Internal summarization runs in middleware; only expose the agent model's text.
-        if (message._getType() === 'ai' && metadata.langgraph_node === 'model_request') {
-          const text = messageText(message.content);
-          if (text && message.id) execution.onTextDelta?.(message.id, text);
+      for await (const [mode, chunk] of stream) {
+        controller.signal.throwIfAborted();
+        if (mode === 'messages') {
+          const [message, metadata] = chunk;
+          // Internal summarization runs in middleware; only expose the agent model's text.
+          if (message._getType() === 'ai' && metadata.langgraph_node === 'model_request') {
+            const text = messageText(message.content);
+            if (text && message.id) execution.onTextDelta?.(message.id, text);
+          }
+          continue;
         }
-        continue;
-      }
-      for (const node of Object.values(chunk)) {
-        if (node && typeof node === 'object' && 'messages' in node && Array.isArray(node.messages)) {
-          for (const message of node.messages as BaseMessage[]) {
-            if (!message.id || !context.messages.some(m => m.id === message.id)) context.messages.push(message);
+        for (const node of Object.values(chunk)) {
+          if (node && typeof node === 'object' && 'messages' in node && Array.isArray(node.messages)) {
+            for (const message of node.messages as BaseMessage[]) {
+              if (!message.id || !context.messages.some(m => m.id === message.id)) context.messages.push(message);
+            }
           }
         }
+        onContextChange(context);
+        yield chunk;
       }
-      onContextChange(context);
-      yield chunk;
-    }
+    } finally { execution.signal?.removeEventListener('abort', abort); }
   }
 
   async cleanup(): Promise<void> {

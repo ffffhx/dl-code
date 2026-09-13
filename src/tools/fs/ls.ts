@@ -61,7 +61,7 @@ export const lsTool = new DynamicStructuredTool({
       });
       
       return `Here's the result in ${targetPath}: \n\`\`\`\n${resultLines.join('\n')}\n\`\`\``;
-    } catch (error) {
+    } catch {
       return `Error: permission denied to access the path ${targetPath}.`;
     }
   },

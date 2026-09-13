@@ -10,6 +10,7 @@ export interface MCPTool {
   name: string;
   description?: string;
   inputSchema: {
+    [key: string]: any;
     type: 'object';
     properties?: Record<string, any>;
     required?: string[];
@@ -68,14 +69,14 @@ export interface MCPServerCapabilities {
   prompts?: {
     listChanged?: boolean;
   };
-  logging?: {};
+  logging?: Record<string, never>;
 }
 
 export interface MCPClientCapabilities {
   roots?: {
     listChanged?: boolean;
   };
-  sampling?: {};
+  sampling?: Record<string, never>;
 }
 
 export interface MCPInitializeResult {

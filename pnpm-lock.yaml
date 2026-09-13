@@ -26,6 +26,9 @@ importers:
       '@opentui/core':
         specifier: 0.5.11
         version: 0.5.11(typescript@5.9.3)(web-tree-sitter@0.25.10)
+      ajv:
+        specifier: ^8.18.0
+        version: 8.18.0
       bun:
         specifier: 1.4.2
         version: 1.4.2
